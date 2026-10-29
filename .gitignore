@@ -4,10 +4,16 @@ dist/
 coverage/
 
 # Capture output is reproducible from source; never commit it.
-bundle/
-unpacked/
-*.repropack
-demo/tmp/
+#
+# Every entry here is root-anchored with a leading slash, and that is
+# load-bearing: an unanchored `bundle/` also matches `src/bundle/`, which
+# silently kept the whole bundle module out of the first commit and turned CI
+# into "cannot find module '../bundle/read.js'".
+/bundle/
+/unpacked/
+/*.repropack
+/demo/tmp/
+/repropack-bundle/
 
 .DS_Store
 Thumbs.db
