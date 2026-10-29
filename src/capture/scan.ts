@@ -99,13 +99,20 @@ export async function scanWorktree(options: ScanOptions): Promise<ScanResult> {
   // git speaks repository-relative paths; the walk speaks cwd-relative ones.
   // Everything git reports is translated through this prefix, and anything
   // outside the scan root is dropped rather than passed through.
-  const repoPrefix = repoRoot ? toPosix(relative(repoRoot, root)) : "";
+  //
+  // The prefix comes from git itself (`rev-parse --show-prefix`) rather than
+  // from path arithmetic. On Windows the two spellings of the same directory
+  // differ — 8.3 short names, drive-letter case, forward vs back slashes — and
+  // `relative()` happily returns "../../.." for a path that is literally the
+  // same, which mapped every git path to "outside the scan root" and produced
+  // an empty bundle with no warning.
+  const repoPrefix = repoRoot ? await showPrefix(root) : "";
   const toScanPath =
     repoPrefix === ""
       ? (repoRelative: string): string => repoRelative
       : (repoRelative: string): string | null => {
-          if (!repoRelative.startsWith(repoPrefix + "/")) return null;
-          return repoRelative.slice(repoPrefix.length + 1);
+          if (!repoRelative.startsWith(repoPrefix)) return null;
+          return repoRelative.slice(repoPrefix.length);
         };
 
   // Names are matched case-insensitively on purpose: the same checkout is
@@ -129,8 +136,8 @@ export async function scanWorktree(options: ScanOptions): Promise<ScanResult> {
     }
     return out;
   };
-  const changed = options.scope === "changed" && repoRoot ? keepWithinRoot(await listChanged(repoRoot)) : null;
-  const tracked = options.scope === "tracked" && repoRoot ? keepWithinRoot(await listTracked(repoRoot)) : null;
+  const changed = options.scope === "changed" && repoRoot ? keepWithinRoot(await listChanged(repoRoot, warnings)) : null;
+  const tracked = options.scope === "tracked" && repoRoot ? keepWithinRoot(await listTracked(repoRoot, warnings)) : null;
   if (!repoRoot && (options.scope === "changed" || options.scope === "tracked")) {
     warnings.push(
       "not a git repository: scope \"" + options.scope + "\" falls back to every unignored file",
@@ -279,7 +286,21 @@ function reasonFor(input: { fromStack: boolean; fromInclude: boolean }): FileRea
  * - without `-z`, a path containing a newline or a quote is printed C-quoted,
  *   so the set would hold `"a\\nb.txt"` instead of the real name.
  */
-async function listChanged(repoRoot: string): Promise<Set<string>> {
+/**
+ * Where the scan root sits inside the repository, as git spells it.
+ *
+ * Returns "" at the top level and "sub/dir/" below it, always with a trailing
+ * slash so the caller can slice without re-checking the boundary.
+ */
+async function showPrefix(root: string): Promise<string> {
+  const raw = await tryCapture(["git", "rev-parse", "--show-prefix"], { cwd: root, timeoutMs: 15_000 });
+  if (raw === null) return "";
+  const trimmed = raw.trim();
+  if (trimmed === "" || trimmed === "./") return "";
+  return toPosix(trimmed.endsWith("/") ? trimmed : trimmed + "/");
+}
+
+async function listChanged(repoRoot: string, warnings: string[]): Promise<Set<string>> {
   const out = new Set<string>();
   let raw: string;
   try {
@@ -287,9 +308,15 @@ async function listChanged(repoRoot: string): Promise<Set<string>> {
       cwd: repoRoot,
       timeoutMs: 20_000,
     });
-    if (result.exitCode !== 0) return out;
+    if (result.exitCode !== 0) {
+      // Returning an empty set here would produce an empty bundle that looks
+      // like a successful capture, so say what happened.
+      warnings.push("git status failed (" + firstLine(result.stderr) + "); scope \"changed\" is empty");
+      return out;
+    }
     raw = result.stdout;
-  } catch {
+  } catch (error) {
+    warnings.push("git status failed (" + (error as Error).message + "); scope \"changed\" is empty");
     return out;
   }
   // Record layout: "XY <path>" then NUL. A rename or copy record is followed
@@ -314,10 +341,13 @@ async function listChanged(repoRoot: string): Promise<Set<string>> {
  * `--full-name` keeps the output repo-relative when git runs from a
  * subdirectory of the repository; the caller maps it back to the scan root.
  */
-async function listTracked(repoRoot: string): Promise<Set<string>> {
+async function listTracked(repoRoot: string, warnings: string[]): Promise<Set<string>> {
   const out = new Set<string>();
   const raw = await tryCapture(["git", "ls-files", "-z", "--full-name"], { cwd: repoRoot, timeoutMs: 30_000 });
-  if (!raw) return out;
+  if (!raw) {
+    warnings.push("git ls-files failed; scope \"tracked\" is empty");
+    return out;
+  }
   for (const path of raw.split("\u0000")) {
     if (path) out.add(path);
   }
@@ -394,7 +424,13 @@ function globToRegex(glob: string): string {
 }
 
 function toPosix(path: string): string {
-  return path.split(sep).join("/");
+  return path.split(sep).join("/").split("\\").join("/");
+}
+
+/** First non-empty line of git's stderr, for a one-line warning. */
+function firstLine(text: string): string {
+  for (const line of text.split(/\r?\n/)) if (line.trim() !== "") return line.trim();
+  return "no output";
 }
 
 /**

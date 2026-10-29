@@ -77,7 +77,15 @@ async function collect(root: string): Promise<TarEntry[]> {
       if (isUnsafeRelativePath(rel)) throw new TarError("unsafe path in bundle: " + rel);
       const handle = await open(abs, "r");
       try {
-        entries.push({ path: rel, data: await handle.readFile(), mtime: Math.floor(info.mtimeMs / 1000) });
+        // The executable bit has to be recorded, not inferred: unpacking a
+        // bundle on Linux must leave replay.sh runnable, and the tar header is
+        // the only place that survives the round trip.
+        entries.push({
+          path: rel,
+          data: await handle.readFile(),
+          mtime: Math.floor(info.mtimeMs / 1000),
+          executable: (info.mode & 0o111) !== 0,
+        });
       } finally {
         await handle.close();
       }
