@@ -1,0 +1,10 @@
+{
+  "name": "demo-calculator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A deliberately broken calculator used to demo repropack",
+  "scripts": {
+    "start": "node src/main.js"
+  }
+}

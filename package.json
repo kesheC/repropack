@@ -1,0 +1,52 @@
+{
+  "name": "repropack",
+  "version": "0.1.0",
+  "description": "Turn a failing command into a self-contained, secret-free repro bundle that anyone can replay with one command.",
+  "type": "module",
+  "bin": {
+    "repropack": "./dist/cli/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "pretest": "npm run build",
+    "test": "vitest run",
+    "dev": "node --experimental-strip-types src/cli/index.ts"
+  },
+  "keywords": [
+    "reproduce",
+    "bug-report",
+    "debugging",
+    "repro-bundle",
+    "secret-redaction",
+    "cli",
+    "ci",
+    "zero-dependencies"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kesheC/repropack.git"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
