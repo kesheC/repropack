@@ -125,8 +125,17 @@ stdout with human progress on stderr.
 The default scope is `changed`, which is right when the bug is in your
 uncommitted edit and wrong when the bug is in committed code: the bundle ends up
 carrying almost nothing and the replay fails on a missing import rather than on
-the original bug. When in doubt, pass `--scope all` and let `--max-bundle-bytes`
-do its job. `verify` will tell you if a bundle looks thin.
+the original bug.
+
+Stack frames soften this. Whatever scope you pick, capture widens the files the
+trace named to their local import closure — follow `./mathy.js` from the frame
+that threw, and follow what that file imports — so a minimal bundle can actually
+run instead of dying on `ERR_MODULE_NOT_FOUND` and "reproducing" the exit code
+for the wrong reason. Imports that leave the project, and anything in
+`node_modules`, stay out.
+
+When in doubt, still pass `--scope all` and let `--max-bundle-bytes` do its job.
+`verify` tells you if a bundle looks thin.
 
 ## What's in a bundle
 
@@ -209,6 +218,10 @@ bundle without replaying it.
 - **Spans, not repeated `replace`.** `redactText` collects non-overlapping spans
   and rebuilds once. Chaining `replace` per rule lets a later rule match inside
   an earlier rule's placeholder.
+- **The file selection follows imports, not just stack frames.** A frame names
+  the line that threw; the modules that line called are what the replay actually
+  needs, so the closure over local imports is what turns a four-file bundle into
+  one that runs.
 - **Replay means the same exit code, not the same bytes.** Timings, temp paths and
   random ids differ every run; comparing stdout byte-for-byte would report a false
   negative on almost every real bundle.
