@@ -1,0 +1,11 @@
+# Normalise line endings on checkout so a Windows clone and a Linux clone of
+# this repository produce the same bytes. Without this, every file shows up as
+# modified on one of the two.
+* text=auto eol=lf
+
+# The generated Windows replay script is a batch file; cmd.exe needs CRLF.
+*.cmd text eol=crlf
+
+# Archives and fixtures are bytes, never text.
+*.repropack binary
+package-lock.json text eol=lf -diff
