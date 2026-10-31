@@ -59,5 +59,9 @@ jobs:
           TARBALL="${{ steps.pack.outputs.tarball }}"
           gh release view "$TAG" -R "$REPO" > /dev/null 2>&1 \
             || gh release create "$TAG" -R "$REPO" --title "$TAG" --generate-notes
+          # GitHub turns a release into a draft if its tag is ever deleted and
+          # re-pushed. Publishing explicitly makes the job idempotent either way;
+          # on an already-published release this is a no-op.
+          gh release edit "$TAG" -R "$REPO" --draft=false
           gh release upload "$TAG" "$TARBALL" "$TARBALL.sha256" -R "$REPO" --clobber
           gh release view "$TAG" -R "$REPO" --json assets -q '.assets[].name'
