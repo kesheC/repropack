@@ -28,7 +28,7 @@
     "pretest": "npm run build",
     "test": "vitest run",
     "dev": "node --experimental-strip-types src/cli/index.ts",
-    "prepare": "npm run build"
+    "prepack": "npm run build"
   },
   "keywords": [
     "reproduce",

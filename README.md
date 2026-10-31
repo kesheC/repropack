@@ -100,8 +100,10 @@ npm link          # puts `repropack` on your PATH
 Requires Node >= 20.11. The build is plain `tsc`; nothing is bundled or
 transpiled beyond type stripping.
 
-> `npm install -g git+https://github.com/...` does **not** work on npm 11: a global
-> install skips `devDependencies`, so the `prepare` build finds no `tsc`.
+> Installing straight from git (`npm install -g git+https://github.com/...`) does
+> **not** work: the checkout has no build output and a global install skips
+> `devDependencies`, so there is no `tsc` to build it with. Use the tarball, or
+> clone and build it yourself.
 
 ## Commands
 

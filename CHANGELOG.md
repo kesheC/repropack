@@ -24,13 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the tarball and its `.sha256` to the GitHub Release.
 - `SECURITY.md` with a supported-versions table, a private reporting channel and an
   explicit in-scope / out-of-scope list.
-- `prepare` script so a checkout builds itself on install.
+- `prepack` script, so `npm pack` always ships a freshly built `dist/`.
 - `author`, `bugs` and `homepage` fields in `package.json`.
 
 ### Changed
 
 - `engines.node` is now `>=20.11` for every release artefact, matching the oldest
   Node version the test matrix exercises.
+- The build hook moved from `prepare` to `prepack`. `prepare` ran on every
+  consumer's machine during install — where `devDependencies` are absent — and npm
+  11 warns loudly about unreviewed install scripts, so the documented install path
+  printed a warning for no benefit. The tarball now ships a prebuilt `dist/`.
 
 ### Removed
 
