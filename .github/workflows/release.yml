@@ -42,7 +42,10 @@ jobs:
           # asset name must not carry the version. Ship both: the stable name
           # for readers, the versioned name so old links keep resolving.
           cp "$TARBALL" repropack.tgz
-          cp "$TARBALL.sha256" repropack.tgz.sha256
+          # Regenerate rather than copy: a checksum file names the asset it
+          # covers, so copying would leave it pointing at the versioned
+          # filename and a sha256sum check of the stable name would fail.
+          sha256sum repropack.tgz > repropack.tgz.sha256
           echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
           cat "$TARBALL.sha256"
       - name: Smoke test the tarball
