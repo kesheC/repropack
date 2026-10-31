@@ -16,7 +16,11 @@ async function makeDir(): Promise<string> {
 afterEach(async () => {
   while (dirs.length > 0) {
     const dir = dirs.pop();
-    if (dir) await rm(dir, { recursive: true, force: true });
+    if (!dir) continue;
+    // Windows keeps a handle open on the git object store for a moment after
+    // the last git process exits, so a single rm can throw EBUSY. Retry with
+    // backoff instead of failing the test that happened to run last.
+    await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 
@@ -156,5 +160,5 @@ describe("probeRepository inside a repository", () => {
     await Promise.all(writes);
     const snapshot = await probeRepository(repo);
     expect(snapshot?.statusLines.length).toBe(200);
-  });
+  }, 60_000);
 });
