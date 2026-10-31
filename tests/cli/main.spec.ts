@@ -267,6 +267,48 @@ describe("main: capture end to end", () => {
   );
 
   it(
+    "keeps a secret in argv out of the progress line on stderr",
+    { timeout: 20_000 },
+    async () => {
+      // Regression: `running <argv>` printed the command verbatim while the
+      // manifest stored a redacted copy. The bundle was safe and the CI log was
+      // not, which is the half that outlives the artifact.
+      const fixture = makeFixture();
+      const previous = process.cwd();
+      process.chdir(fixture.root);
+      const key = "sk-" + "proj-" + "A".repeat(24);
+      try {
+        const io = captureIo();
+        const code = await main([
+          "capture",
+          "--out",
+          fixture.out,
+          "--no-git",
+          "--json",
+          "--",
+          "node",
+          "src/broken.js",
+          "--token",
+          key,
+        ]);
+
+        expect(code).toBe(0);
+        expect(io.stderr()).toContain("running node src/broken.js --token");
+        expect(io.stderr()).not.toContain(key);
+        expect(io.stdout()).not.toContain(key);
+
+        const manifest = JSON.parse(readFileSync(join(fixture.out, "bundle.json"), "utf8")) as {
+          command: { argv: string[] };
+        };
+        expect(manifest.command.argv).toContain("REDACTED_OPENAI_KEY");
+      } finally {
+        process.chdir(previous);
+        rmSync(fixture.root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it(
     "warns about an unknown option without changing the exit code",
     { timeout: 20_000 },
     async () => {

@@ -9,6 +9,7 @@ import { readBundle } from "../bundle/read.js";
 import { packBundle, ARCHIVE_SUFFIX } from "../archive/index.js";
 import { buildReport } from "../report/index.js";
 import { createLogger } from "../util/log.js";
+import { redactText } from "../redact/index.js";
 import { TOOL_VERSION } from "../version.js";
 import type { CaptureScope, VerifyResult } from "../types.js";
 
@@ -163,7 +164,12 @@ async function runCapture(argv: readonly string[]): Promise<number> {
   }
 
   const out = resolve(flagString(args, "out") ?? "repropack-bundle");
-  log.info("running " + args.positionals.join(" "));
+  // This line goes to stderr, which in CI is a log that outlives the bundle. It
+  // used to print the argv verbatim while the manifest stored a redacted copy, so
+  // a token passed as an argument was scrubbed from the artifact and published
+  // anyway in the job output. Progress lines are held to the same rule as the
+  // thing they describe.
+  log.info("running " + redactText(args.positionals.join(" "), { surface: "command" }).text);
   const result = await capture({
     argv: args.positionals,
     out,
