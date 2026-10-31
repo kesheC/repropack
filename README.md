@@ -263,6 +263,12 @@ npm test          # builds first, then runs vitest
 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) documents the module layout, the
 constraints, and the two invariants the rest of the code depends on.
 
+## Security and changes
+
+Found a vulnerability? Please do not open a public issue — [SECURITY.md](SECURITY.md)
+explains the private reporting channel and what to include. Every release is written
+up in [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
