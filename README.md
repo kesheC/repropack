@@ -87,6 +87,18 @@ npm install -g https://github.com/kesheC/repropack/releases/latest/download/repr
 repropack --version
 ```
 
+Every release publishes the same tarball under a stable name (`repropack.tgz`) alongside a
+`repropack.tgz.sha256` checksum. To verify the download before running it:
+
+```bash
+curl -sLO https://github.com/kesheC/repropack/releases/latest/download/repropack.tgz
+curl -sLO https://github.com/kesheC/repropack/releases/latest/download/repropack.tgz.sha256
+sha256sum -c repropack.tgz.sha256          # repropack.tgz: OK
+npm install -g ./repropack.tgz
+```
+
+On macOS use `shasum -a 256 -c repropack.tgz.sha256` — there is no `sha256sum` by default.
+
 Or build it from source — there is no runtime dependency to download either way:
 
 ```sh
