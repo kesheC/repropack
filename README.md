@@ -120,7 +120,7 @@ Run `repropack --help` for every flag. The ones that matter most:
 
 | Flag | Default | Why you would change it |
 |---|---|---|
-| `--scope changed\|tracked\|all` | `changed` | `changed` sends only the files git says differ. `all` sends the working tree. Use `all` when the failing code is committed, which is most of the time — see [the trap below](#the-one-trap-scope-changed). |
+| `--scope changed\|tracked\|all` | `changed` | `changed` sends only the files git says differ. `all` sends the working tree. Use `all` when the failing code is committed, which is most of the time — see [the trap below](#the-one-trap---scope-changed). |
 | `--include <glob>` | — | Force a file in even outside the scope. Repeatable. |
 | `--exclude <glob>` | — | Keep a file out. Repeatable. |
 | `--max-file-bytes <n>` | 262144 | Per-file ceiling. |
