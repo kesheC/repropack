@@ -79,8 +79,9 @@ back-and-forth.
 
 ## Install
 
-> **The name `repropack` on npm belongs to an unrelated package.** This project is
-> not published there. Every release ships a ready-to-install tarball instead.
+> **The name `repropack` on npm belongs to a different project by another author**
+> ([`saivarun1410/repropack`](https://github.com/saivarun1410/repropack)), so this project
+> cannot use it. Every release here ships a ready-to-install tarball instead.
 
 ```sh
 npm install -g https://github.com/kesheC/repropack/releases/latest/download/repropack.tgz
@@ -218,7 +219,7 @@ const { bundle, root } = await capture({
   argv: ["node", "src/main.js"],
   scope: "all",
   out: "./bundle",
-  toolVersion: "0.1.5",
+  toolVersion: "0.1.6",
 });
 
 const verified = await verifyBundle(root, { strict: true });
