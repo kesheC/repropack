@@ -53,6 +53,10 @@ jobs:
           mkdir -p /tmp/smoke && cd /tmp/smoke
           npm init -y > /dev/null
           npm install "$GITHUB_WORKSPACE/$TARBALL"
+          # The stable-named copy is what the README tells people to install.
+          # Installing it here means a broken copy fails the release instead
+          # of shipping a documented command that 404s or installs nothing.
+          npm install "$GITHUB_WORKSPACE/repropack.tgz"
           ./node_modules/.bin/repropack --version
       - name: Publish release assets
         env:
@@ -70,4 +74,11 @@ jobs:
           # on an already-published release this is a no-op.
           gh release edit "$TAG" -R "$REPO" --draft=false
           gh release upload "$TAG" "$TARBALL" "$TARBALL.sha256" repropack.tgz repropack.tgz.sha256 -R "$REPO" --clobber
-          gh release view "$TAG" -R "$REPO" --json assets -q '.assets[].name'
+          ASSETS=$(gh release view "$TAG" -R "$REPO" --json assets -q '.assets[].name')
+          echo "$ASSETS"
+          for expected in repropack.tgz repropack.tgz.sha256; do
+            if ! printf '%s\n' "$ASSETS" | grep -qx "$expected"; then
+              echo "missing release asset: $expected" >&2
+              exit 1
+            fi
+          done
