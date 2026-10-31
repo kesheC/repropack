@@ -54,9 +54,13 @@ jobs:
           npm init -y > /dev/null
           npm install "$GITHUB_WORKSPACE/$TARBALL"
           # The stable-named copy is what the README tells people to install.
-          # Installing it here means a broken copy fails the release instead
-          # of shipping a documented command that 404s or installs nothing.
+          # It gets its own empty directory on purpose: installing it next to
+          # the versioned tarball is a no-op, because npm sees the same
+          # name+version already satisfied and never reads the new file.
+          mkdir -p /tmp/smoke-stable && cd /tmp/smoke-stable
+          npm init -y > /dev/null
           npm install "$GITHUB_WORKSPACE/repropack.tgz"
+          test -x ./node_modules/.bin/repropack
           ./node_modules/.bin/repropack --version
       - name: Publish release assets
         env:
