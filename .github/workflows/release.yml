@@ -64,7 +64,12 @@ jobs:
           npm init -y > /dev/null
           npm install "$GITHUB_WORKSPACE/repropack.tgz"
           test -x ./node_modules/.bin/repropack
-          ./node_modules/.bin/repropack --version
+          # Compare against package.json, not just "did it exit 0": a broken
+          # entry guard makes the CLI exit 0 having printed nothing.
+          expected=$(node -p "require('./node_modules/repropack/package.json').version")
+          actual=$(./node_modules/.bin/repropack --version)
+          echo "repropack --version = $actual (expected $expected)"
+          [ "$actual" = "$expected" ] || { echo "version mismatch" >&2; exit 1; }
       - name: Publish release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
