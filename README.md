@@ -80,8 +80,14 @@ back-and-forth.
 ## Install
 
 > **The name `repropack` on npm belongs to an unrelated package.** This project is
-> not published there. Install from source; it takes one command and there are no
-> runtime dependencies to download.
+> not published there. Every release ships a ready-to-install tarball instead.
+
+```sh
+npm install -g https://github.com/kesheC/repropack/releases/download/v0.1.1/repropack-0.1.1.tgz
+repropack --version
+```
+
+Or build it from source — there is no runtime dependency to download either way:
 
 ```sh
 git clone https://github.com/kesheC/repropack.git
@@ -93,6 +99,9 @@ npm link          # puts `repropack` on your PATH
 
 Requires Node >= 20.11. The build is plain `tsc`; nothing is bundled or
 transpiled beyond type stripping.
+
+> `npm install -g git+https://github.com/...` does **not** work on npm 11: a global
+> install skips `devDependencies`, so the `prepare` build finds no `tsc`.
 
 ## Commands
 

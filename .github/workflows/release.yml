@@ -1,0 +1,63 @@
+name: Release
+
+# Building the tarball in CI and attaching it to the GitHub Release is the
+# installation path users actually get to run. Installing a TypeScript CLI
+# straight from a git URL does not work on npm 11: global installs skip
+# devDependencies, so the `prepare` build finds no tsc, and even when dist is
+# committed the global install lands as a symlink into npm's throw-away git
+# clone. A packed tarball has no such problem.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: pack and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - name: Pack
+        id: pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack
+          TARBALL=$(ls repropack-*.tgz | head -n 1)
+          if [ ! -f "$TARBALL" ]; then echo "npm pack produced nothing" >&2; exit 1; fi
+          sha256sum "$TARBALL" > "$TARBALL.sha256"
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+          cat "$TARBALL.sha256"
+      - name: Smoke test the tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARBALL="${{ steps.pack.outputs.tarball }}"
+          mkdir -p /tmp/smoke && cd /tmp/smoke
+          npm init -y > /dev/null
+          npm install "$GITHUB_WORKSPACE/$TARBALL"
+          ./node_modules/.bin/repropack --version
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARBALL="${{ steps.pack.outputs.tarball }}"
+          gh release view "$TAG" -R "$REPO" > /dev/null 2>&1 \
+            || gh release create "$TAG" -R "$REPO" --title "$TAG" --generate-notes
+          gh release upload "$TAG" "$TARBALL" "$TARBALL.sha256" -R "$REPO" --clobber
+          gh release view "$TAG" -R "$REPO" --json assets -q '.assets[].name'
