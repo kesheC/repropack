@@ -20,12 +20,13 @@ jobs:
     name: pack and publish
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run typecheck
       - run: npm run build
       - run: npm test
       - name: Pack
@@ -37,6 +38,11 @@ jobs:
           TARBALL=$(ls repropack-*.tgz | head -n 1)
           if [ ! -f "$TARBALL" ]; then echo "npm pack produced nothing" >&2; exit 1; fi
           sha256sum "$TARBALL" > "$TARBALL.sha256"
+          # The README links releases/latest/download/repropack.tgz, so the
+          # asset name must not carry the version. Ship both: the stable name
+          # for readers, the versioned name so old links keep resolving.
+          cp "$TARBALL" repropack.tgz
+          cp "$TARBALL.sha256" repropack.tgz.sha256
           echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
           cat "$TARBALL.sha256"
       - name: Smoke test the tarball
@@ -63,5 +69,5 @@ jobs:
           # re-pushed. Publishing explicitly makes the job idempotent either way;
           # on an already-published release this is a no-op.
           gh release edit "$TAG" -R "$REPO" --draft=false
-          gh release upload "$TAG" "$TARBALL" "$TARBALL.sha256" -R "$REPO" --clobber
+          gh release upload "$TAG" "$TARBALL" "$TARBALL.sha256" repropack.tgz repropack.tgz.sha256 -R "$REPO" --clobber
           gh release view "$TAG" -R "$REPO" --json assets -q '.assets[].name'
