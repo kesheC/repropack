@@ -15,5 +15,7 @@ coverage/
 /demo/tmp/
 /repropack-bundle/
 
+pack-meta.json
+
 .DS_Store
 Thumbs.db

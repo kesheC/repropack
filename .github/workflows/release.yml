@@ -79,6 +79,28 @@ jobs:
         run: |
           set -euo pipefail
           TARBALL="${{ steps.pack.outputs.tarball }}"
+          # --- tag/version gate ---
+          # Publishing is tag-driven, so the tag is the only thing that says
+          # which version this is. If it disagrees with package.json the job
+          # happily uploads 0.1.6 assets under a v0.1.7 label. Gate before any
+          # gh call, and print both sides so the fix is obvious.
+          # Inline node -e on purpose: the repo is "type":"module", so a saved
+          # .js file would be ESM and require would not exist there.
+          node -e '
+          const fs = require("fs");
+          const tag = process.argv[1];
+          const version = JSON.parse(fs.readFileSync("package.json", "utf8")).version;
+          const parsed = /^v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/.exec(tag);
+          if (!parsed) {
+            console.error("tag is not a vX.Y.Z tag: " + tag);
+            process.exit(1);
+          }
+          if (parsed[1] !== version) {
+            console.error("tag/version mismatch: tag says " + parsed[1] + ", package.json says " + version);
+            process.exit(1);
+          }
+          console.log("tag " + tag + " matches package.json version " + version);
+          ' "$TAG"
           # The release body is the CHANGELOG section for this tag, so a reader
           # who lands on the release page sees what changed without a second
           # hop. Failing when the section is missing is deliberate: a tag with
