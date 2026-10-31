@@ -80,11 +80,22 @@ export async function run(argv: readonly string[], options: RunOptions): Promise
   if (options.stdin !== undefined) child.stdin.end(options.stdin);
   else child.stdin.end();
 
-  const { code, sig } = await new Promise<{ code: number | null; sig: NodeJS.Signals | null }>((resolve, reject) => {
-    child.on("error", reject);
-    child.on("close", (exitCode, signal) => resolve({ code: exitCode, sig: signal }));
-  });
-  if (timer) clearTimeout(timer);
+  // The timer has to be cleared on every exit path. When spawn fails (ENOENT for
+  // a command that does not exist) the promise rejects, and a clearTimeout placed
+  // after the await would be skipped -- leaving a pending timer that keeps the
+  // process alive until the full timeout elapses, so a capture that failed in
+  // 200ms would still hang for the whole --timeout. finally is the only placement
+  // that covers resolve, reject and a thrown listener alike.
+  let code: number | null;
+  let sig: NodeJS.Signals | null;
+  try {
+    ({ code, sig } = await new Promise<{ code: number | null; sig: NodeJS.Signals | null }>((resolve, reject) => {
+      child.on("error", reject);
+      child.on("close", (exitCode, signal) => resolve({ code: exitCode, sig: signal }));
+    }));
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 
   return {
     exitCode: code,

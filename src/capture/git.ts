@@ -35,11 +35,23 @@ export async function probeRepository(cwd: string): Promise<RepositorySnapshot |
     .map((line) => redactText(line, { surface: "repository.statusLines" }).text);
 
   const remotesRaw = await tryCapture(["git", "remote", "-v"], { cwd, timeoutMs: 10_000 });
-  const remotes = parseRemotes(remotesRaw ?? "");
+  // A remote can carry a user name in its path (https://host/alice/repo.git),
+  // and a self-hosted origin can carry a token that survived stripCredentials.
+  // Both are published with the bundle, so both get the same treatment.
+  const remotes = parseRemotes(remotesRaw ?? "").map((remote) => ({
+    name: remote.name,
+    url: redactText(remote.url, { surface: "repository.remotes" }).text,
+  }));
 
   return {
     vcs: "git",
-    root,
+    // Everything here ends up in bundle.json, which is published verbatim when
+    // the bundle is attached to an issue. An absolute root therefore publishes
+    // the OS user name of whoever produced it -- which is why this goes through
+    // the same redaction engine as the file contents instead of being stored
+    // raw. The unredacted `root` stays local: it is only needed below, to strip
+    // the prefix off status lines.
+    root: redactText(root, { surface: "repository.root" }).text,
     commit: commit ?? "",
     branch: branch && branch !== "HEAD" ? branch : null,
     describe: describe ?? null,

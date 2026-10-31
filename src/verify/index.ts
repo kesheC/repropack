@@ -168,6 +168,58 @@ function checkManifest(loaded: LoadedBundle, add: AddFinding): void {
   if (!loaded.integrityOk && !loaded.problems.some((problem) => problem.startsWith("integrity mismatch"))) {
     add("blocker", "integrity-mismatch", "manifest integrity hash does not match its own payload", "bundle.json");
   }
+  checkManifestText(loaded.manifest, add);
+}
+
+/**
+ * Scan the manifest's own fields for secrets and home paths.
+ *
+ * bundle.json travels inside the archive, so it is published exactly like
+ * files/ is -- the JSON shape of a field is no reason to trust its contents.
+ * That asymmetry is how a home directory in `repository.root` shipped inside a
+ * bundle that verify had just called clean.
+ *
+ * Fields are visited as *decoded* strings rather than by regexing the raw JSON
+ * text. A Windows path serialises as `C:\\Users\\alice`, where the doubled
+ * backslash defeats a pattern that expects exactly one separator -- the escape
+ * would hide the very leak this is looking for. Walking the object also lets a
+ * finding name the offending field instead of dumping the whole document.
+ */
+function checkManifestText(manifest: Bundle, add: AddFinding): void {
+  const fields: { readonly display: string; readonly text: string }[] = [];
+  collectStrings(manifest, "bundle.json", fields, 0);
+  // No absolute-path note here, unlike every other surface: a manifest is full of
+  // paths by design (the captured repository root, remote URLs, status lines), so
+  // the note would fire on every bundle captured inside a git repo and train
+  // readers to skip the whole findings list. The note earns its place in files/,
+  // where a path is incidental.
+  for (const field of fields) auditText(field.text, field.display, add);
+}
+
+/** Depth cap: the manifest is a fixed shape, so this only stops a hand-written one from looping. */
+const MAX_MANIFEST_DEPTH = 8;
+
+function collectStrings(
+  value: unknown,
+  at: string,
+  out: { display: string; text: string }[],
+  depth: number,
+): void {
+  if (depth > MAX_MANIFEST_DEPTH) return;
+  if (typeof value === "string") {
+    out.push({ display: at, text: value });
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      collectStrings(value[index], at + "[" + String(index) + "]", out, depth + 1);
+    }
+    return;
+  }
+  if (value === null || typeof value !== "object") return;
+  for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+    collectStrings(inner, at + "." + key, out, depth + 1);
+  }
 }
 
 /** A bundle whose command cannot be replayed verbatim describes a repro; it is not one. */
@@ -252,12 +304,59 @@ async function checkTotalSize(root: string, surfaces: readonly DiskFile[], add: 
 }
 
 /**
+ * The rules every text surface is held to, whichever tree it lives in.
+ *
+ * Shared with the bundle.json audit below so a manifest field cannot quietly
+ * escape a check that file contents are subject to -- that asymmetry is exactly
+ * how a home directory in `repository.root` shipped inside a "verified" bundle.
+ */
+function auditText(text: string, display: string, add: AddFinding): void {
+  for (const hit of findResidualSecrets(text)) {
+    if (hit.rule === HOME_RULE) continue; // reported below, at warning severity
+    add(
+      "blocker",
+      "leak-suspected",
+      'redaction rule "' +
+        hit.rule +
+        '" still matches ' +
+        plural(hit.count, "time", "times") +
+        "; this surface must not be published as it stands",
+      display,
+    );
+  }
+
+  const homeNames = new Set<string>();
+  let homeMatches = 0;
+  const noteHomeName = (name: string | undefined): void => {
+    if (name === undefined) return;
+    // A placeholder is the fix, not the leak: capture already replaced this
+    // segment. Treating it as a name would warn on every bundle captured from a
+    // home directory, which is most of them.
+    if (isPlaceholderText(name)) return;
+    if (NON_PERSONAL_HOME_NAMES.has(name.toLowerCase())) return;
+    homeMatches += 1;
+    homeNames.add(name);
+  };
+  for (const match of text.matchAll(HOME_PATH_PATTERN)) noteHomeName(match[1]);
+  if (homeNames.size > 0) {
+    add(
+      "warning",
+      "user-home-leak",
+      "a home path exposes " +
+        describeNames([...homeNames]) +
+        " (" +
+        plural(homeMatches, "occurrence", "occurrences") +
+        "); a bundle carrying a real user name should not be posted publicly",
+      display,
+    );
+  }
+}
+
+/**
  * Content checks for one surface file: size, payload hash, then the text rules.
  *
- * Only files/ and logs/ are scanned. bundle.json is hash-verified and its paths
- * shape-checked but never pattern-scanned: repository.root is *meant* to be
- * absolute, so scanning the manifest would put an absolute-path note on every
- * healthy bundle and teach people to ignore the check.
+ * bundle.json is not routed through here -- it is audited separately by
+ * checkManifest, which sees its fields.
  */
 async function inspectFile(file: DiskFile, expected: string | undefined, add: AddFinding): Promise<void> {
   if (file.size > OVERSIZE_FILE_BYTES) {
@@ -288,50 +387,12 @@ async function inspectFile(file: DiskFile, expected: string | undefined, add: Ad
     }
   }
 
-  for (const hit of findResidualSecrets(sample.text)) {
-    if (hit.rule === HOME_RULE) continue; // reported below, at warning severity
-    add(
-      "blocker",
-      "leak-suspected",
-      'redaction rule "' +
-        hit.rule +
-        '" still matches ' +
-        plural(hit.count, "time", "times") +
-        "; this surface must not be published as it stands",
-      file.display,
-    );
-  }
-
   // Path heuristics stay off binary content: bytes that merely look like a path
   // are noise, while a secret embedded in a blob is still a secret and is
   // reported above.
   if (sample.binary) return;
 
-  const homeNames = new Set<string>();
-  let homeMatches = 0;
-  for (const match of sample.text.matchAll(HOME_PATH_PATTERN)) {
-    const name = match[1];
-    if (name === undefined) continue;
-    // A placeholder is the fix, not the leak: capture already replaced this
-    // segment. Treating it as a name would warn on every bundle captured from a
-    // home directory, which is most of them.
-    if (isPlaceholderText(name)) continue;
-    if (NON_PERSONAL_HOME_NAMES.has(name.toLowerCase())) continue;
-    homeMatches += 1;
-    homeNames.add(name);
-  }
-  if (homeNames.size > 0) {
-    add(
-      "warning",
-      "user-home-leak",
-      "a home path exposes " +
-        describeNames([...homeNames]) +
-        " (" +
-        plural(homeMatches, "occurrence", "occurrences") +
-        "); a bundle carrying a real user name should not be posted publicly",
-      file.display,
-    );
-  }
+  auditText(sample.text, file.display, add);
 
   const absolute = sample.text.match(ABSOLUTE_PATH_PATTERN) ?? [];
   if (absolute.length > 0) {

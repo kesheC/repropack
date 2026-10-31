@@ -63,13 +63,16 @@ const manifest = {
 /** Write a bundle and return its directory. */
 async function build(
   files: readonly StagedFile[],
-  options: { argv?: readonly string[]; logs?: readonly { path: string; content: Buffer }[] } = {},
+  options: {
+    argv?: readonly string[];
+    logs?: readonly { path: string; content: Buffer }[];
+    repository?: Bundle["repository"];
+  } = {},
 ): Promise<string> {
+  const base = options.argv ? { ...manifest, command: { ...manifest.command, argv: options.argv } } : manifest;
   await writeBundle({
     root: workdir,
-    manifest: options.argv
-      ? { ...manifest, command: { ...manifest.command, argv: options.argv } }
-      : manifest,
+    manifest: options.repository === undefined ? base : { ...base, repository: options.repository },
     files,
     logs: options.logs ?? [
       { path: "logs/stdout.txt", content: Buffer.from("ran fine\n", "utf8") },
@@ -261,6 +264,77 @@ describe("verifyBundle: leaks", () => {
     const result = await verifyBundle(root);
 
     expect(result.findings.filter((f) => f.code === "user-home-leak")).toEqual([]);
+    expect(result.ok).toBe(true);
+  });
+});
+
+/**
+ * Regression for the hole that made verify useless as a publication gate:
+ * bundle.json was never pattern-scanned, so capture's unredacted
+ * `repository.root` shipped inside a bundle that verify called clean.
+ */
+describe("verifyBundle: the manifest's own fields", () => {
+  const repository = {
+    vcs: "git" as const,
+    root: "C:\\Users\\alice\\project",
+    commit: "0".repeat(40),
+    branch: "main",
+    describe: null,
+    dirty: false,
+    statusLines: [] as readonly string[],
+    remotes: [] as readonly { name: string; url: string }[],
+  };
+
+  it("reports a home directory left unredacted in repository.root", async () => {
+    const root = await build([staged("a.ts", "export const a = 1;\n")], { repository });
+
+    const result = await verifyBundle(root);
+    const hit = result.findings.find((f) => f.code === "user-home-leak");
+
+    // A warning, not a blocker: the bundle still replays, it just should not be
+    // posted as-is. verify's job is to say so once, loudly, on the right field.
+    expect(hit?.severity).toBe("warning");
+    expect(hit?.path).toBe("bundle.json.repository.root");
+    expect(hit?.message).toContain('"alice"');
+  });
+
+  it("reports a home directory in a remote url", async () => {
+    const root = await build([staged("a.ts", "export const a = 1;\n")], {
+      repository: {
+        ...repository,
+        root: "REDACTED_USER_HOME_PATH",
+        remotes: [{ name: "origin", url: "https://host/home/alice/repo.git" }],
+      },
+    });
+
+    const result = await verifyBundle(root);
+
+    expect(result.findings.map((f) => f.path)).toContain("bundle.json.repository.remotes[0].url");
+  });
+
+  it("sees a secret hidden in a manifest field", async () => {
+    const root = await build([staged("a.ts", "export const a = 1;\n")], {
+      repository: { ...repository, root: "REDACTED_USER_HOME_PATH", branch: "fix/" + FAKE_KEY },
+    });
+
+    const result = await verifyBundle(root);
+    const hit = result.findings.find((f) => f.code === "leak-suspected");
+
+    expect(hit?.severity).toBe("blocker");
+    expect(hit?.path).toBe("bundle.json.repository.branch");
+    expect(hit?.message).not.toContain(FAKE_KEY);
+    expect(result.ok).toBe(false);
+  });
+
+  it("does not repeat a placeholder from a manifest field", async () => {
+    const root = await build([staged("a.ts", "export const a = 1;\n")], {
+      repository: { ...repository, root: "C:\\Users\\REDACTED_USER_HOME_PATH\\project" },
+    });
+
+    const result = await verifyBundle(root);
+
+    expect(result.findings.filter((f) => f.code === "user-home-leak")).toEqual([]);
+    expect(result.findings.filter((f) => f.code === "leak-suspected")).toEqual([]);
     expect(result.ok).toBe(true);
   });
 });

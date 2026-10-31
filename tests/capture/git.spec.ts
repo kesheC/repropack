@@ -13,6 +13,13 @@ async function makeDir(): Promise<string> {
   return dir;
 }
 
+/** The user-name segment of `dir`, e.g. "alice" for /home/alice/project. */
+function userSegment(dir: string): string | undefined {
+  const segments = dir.split(/[\\/]/);
+  const root = segments.findIndex((segment) => segment === "Users" || segment === "home");
+  return root === -1 ? undefined : segments[root + 1];
+}
+
 afterEach(async () => {
   while (dirs.length > 0) {
     const dir = dirs.pop();
@@ -133,6 +140,37 @@ describe("probeRepository inside a repository", () => {
     expect(snapshot?.dirty).toBe(false);
     expect(snapshot?.statusLines).toEqual([]);
     expect(snapshot?.root.toLowerCase()).toContain(repo.split(/[\\/]/).pop()?.toLowerCase() ?? "");
+  });
+
+  /**
+   * The snapshot lands in bundle.json verbatim, so an absolute root publishes the
+   * OS user name of the person who captured the bundle. Redaction replaces the
+   * user segment and leaves the rest of the path readable, which keeps the field
+   * useful in a bug report without naming anyone.
+   */
+  it("never publishes the capturing user's name in root", async () => {
+    if (!usable) return;
+    const snapshot = await probeRepository(repo);
+
+    const name = userSegment(repo);
+    // A temp dir can sit outside any home root (CI runs in /builds, for one), in
+    // which case there is no name to redact and nothing to assert.
+    if (name === undefined) return;
+
+    expect(snapshot?.root).toContain("REDACTED_");
+    expect(snapshot?.root).not.toContain("/" + name + "/");
+    expect(snapshot?.root).not.toContain("\\" + name + "\\");
+  });
+
+  it("redacts a user name that appears inside a remote url", async () => {
+    if (!usable) return;
+    await run(["git", "remote", "set-url", "origin", "https://example.com/home/alice/repo.git"], {
+      cwd: repo,
+      timeoutMs: 30_000,
+    });
+    const snapshot = await probeRepository(repo);
+
+    expect(snapshot?.remotes.map((remote) => remote.url)).toContain("https://example.com/home/REDACTED_USER_HOME_PATH/repo.git");
   });
 
   it("strips credentials from remotes", async () => {
