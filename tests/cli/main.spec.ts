@@ -74,13 +74,13 @@ describe("main: dispatch and usage", () => {
   it("prints the version for --version", async () => {
     const io = captureIo();
     await expect(main(["--version"])).resolves.toBe(0);
-    expect(io.stdout().trim()).toBe("0.1.3");
+    expect(io.stdout().trim()).toBe("0.1.4");
   });
 
   it("prints the version for the version subcommand", async () => {
     const io = captureIo();
     await expect(main(["version"])).resolves.toBe(0);
-    expect(io.stdout().trim()).toBe("0.1.3");
+    expect(io.stdout().trim()).toBe("0.1.4");
   });
 
   it("rejects an unknown command with exit 2 and writes the error to stderr", async () => {
