@@ -83,7 +83,7 @@ back-and-forth.
 > not published there. Every release ships a ready-to-install tarball instead.
 
 ```sh
-npm install -g https://github.com/kesheC/repropack/releases/download/v0.1.1/repropack-0.1.1.tgz
+npm install -g https://github.com/kesheC/repropack/releases/latest/download/repropack.tgz
 repropack --version
 ```
 
