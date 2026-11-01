@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-11-01
+
 ### Fixed
 
 - **A mistyped flag is reported even when `--help` is on the same line.** Every
@@ -34,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   -- `{"error":{"message":...,"exitCode":2}}` on stdout and the usual
   `error:` line on stderr. `--json` after `--` still belongs to the captured
   command, not to repropack.
+
+### Quality
+
+- 379 tests across 27 spec files, 4964 lines of TypeScript.
+- CI matrix: Ubuntu and Windows, Node 20 and 22.
+- Zero runtime dependencies.
 
 ## [0.1.10] - 2026-11-01
 
@@ -243,7 +251,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI matrix: Ubuntu and Windows, Node 20 and 22.
 - Zero runtime dependencies.
 
-[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.10...HEAD
+[0.1.11]: https://github.com/kesheC/repropack/compare/v0.1.10...v0.1.11
+[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.11...HEAD
 [0.1.10]: https://github.com/kesheC/repropack/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/kesheC/repropack/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kesheC/repropack/compare/v0.1.7...v0.1.8
