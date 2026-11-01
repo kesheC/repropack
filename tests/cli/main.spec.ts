@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { main } from "../../src/cli/main.js";
 import { computeIntegrity } from "../../src/bundle/manifest.js";
+import { TOOL_VERSION } from "../../src/version.js";
 
 /**
  * main() writes with process.stdout/stderr.write and returns an exit code.
@@ -89,16 +90,21 @@ describe("main: dispatch and usage", () => {
     expect(io.stdout()).toContain("repropack capture");
   });
 
+  // Compared against TOOL_VERSION rather than a literal: the literal turned
+  // every version bump into a test failure in a file that has nothing to do
+  // with versioning. tests/version.spec.ts already pins TOOL_VERSION to
+  // package.json, so drift still fails CI.
   it("prints the version for --version", async () => {
     const io = captureIo();
     await expect(main(["--version"])).resolves.toBe(0);
-    expect(io.stdout().trim()).toBe("0.1.7");
+    expect(io.stdout().trim()).toBe(TOOL_VERSION);
+    expect(io.stdout().trim()).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
   it("prints the version for the version subcommand", async () => {
     const io = captureIo();
     await expect(main(["version"])).resolves.toBe(0);
-    expect(io.stdout().trim()).toBe("0.1.7");
+    expect(io.stdout().trim()).toBe(TOOL_VERSION);
   });
 
   it("rejects an unknown command with exit 2 and writes the error to stderr", async () => {

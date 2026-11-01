@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-11-01
+
+### Added
+
+- **The release gates are executed, not spell-checked.** `tests/workflow.test.ts`
+  used to assert that certain strings appeared in `release.yml` and `ci.yml`.
+  That is a test of the YAML's spelling: a gate whose logic had been gutted
+  still passed. Each guard's own shell body is now cut out of the workflow and
+  run against throwaway fixtures -- the tag gate against matching, drifted,
+  non-semver and prerelease tags; the package-contents assertion against a
+  complete manifest, a stray `.js.map`, a tarball with no `dist/` at all, and a
+  leaked `src/`. 21 cases, up from 6.
+- **A version bump is no longer a test edit.** `tests/cli/main.spec.ts` pinned
+  `--version` to a literal, so every release turned two unrelated cases red.
+  It now compares against `TOOL_VERSION`, which `tests/version.spec.ts` already
+  ties to `package.json` -- drift still fails CI, a bump does not.
+- **Rewriting the tests lost three guards; all three are back.** The release is
+  re-published with `gh release edit --draft=false` before any upload (GitHub
+  demotes a release to a draft when its tag is deleted and pushed again), the
+  `repropack` bin is smoke tested from the installed package, and `npm run build`
+  still clears `dist/` before compiling.
 ## [0.1.7] - 2026-11-01
 
 ### Added
