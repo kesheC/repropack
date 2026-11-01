@@ -11,6 +11,12 @@ export interface ParsedArgs {
   readonly positionals: readonly string[];
   readonly flags: Readonly<Record<string, string | string[] | boolean>>;
   readonly unknown: readonly string[];
+  /**
+   * Flags the parser knows but that arrived without a value. Kept apart from
+   * `unknown` because the honest message is "--out needs a value", not
+   * "unknown option '--out'".
+   */
+  readonly missingValue: readonly string[];
 }
 
 export interface FlagSpec {
@@ -34,6 +40,7 @@ export function parseArgs(argv: readonly string[], specs: readonly FlagSpec[]): 
 
   const positionals: string[] = [];
   const unknown: string[] = [];
+  const missingValue: string[] = [];
   const flags: Record<string, string | string[] | boolean> = {};
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -76,7 +83,10 @@ export function parseArgs(argv: readonly string[], specs: readonly FlagSpec[]): 
     if (value === undefined) {
       const next = argv[i + 1];
       if (next === undefined || (next.startsWith("-") && next !== "-")) {
-        unknown.push(arg);
+        // A known flag that is short of a value is not an unknown flag. The
+        // old code reported "unknown option '--out'; did you mean '--out'?"
+        // because the name was real and the suggestion matched it.
+        missingValue.push(arg);
         continue;
       }
       value = next;
@@ -91,7 +101,7 @@ export function parseArgs(argv: readonly string[], specs: readonly FlagSpec[]): 
     }
   }
 
-  return { positionals, flags, unknown };
+  return { positionals, flags, unknown, missingValue };
 }
 
 export function flagString(args: ParsedArgs, name: string): string | undefined {

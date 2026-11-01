@@ -390,6 +390,26 @@ describe("main: capture end to end", () => {
       }
     },
   );
+  it("says a known flag is short of a value instead of calling it unknown", async () => {
+    // Before this, "--out" with nothing after it printed
+    //   error: unknown option '--out'; did you mean '--out'?
+    // because the parser treated a missing value as an unknown flag and the
+    // suggester could propose the very name it was given.
+    const io = captureIo();
+    expect(await main(["capture", "--out"])).toBe(2);
+    expect(io.stderr()).toContain("error: --out needs a value");
+    expect(io.stderr()).not.toContain("unknown option");
+    expect(io.stderr()).not.toContain("did you mean");
+  });
+
+  it("never suggests the flag the user already wrote", async () => {
+    // "--nope" is two edits from "--scope", so the suggestion itself is fine;
+    // what must never happen is a suggestion equal to the input.
+    const io = captureIo();
+    expect(await main(["capture", "--nope", "--", "node", "-e", "0"])).toBe(2);
+    expect(io.stderr()).toContain("unknown option '--nope'");
+    expect(io.stderr()).not.toContain("'--nope'?");
+  });
 });
 
 describe("main: pack and report", () => {

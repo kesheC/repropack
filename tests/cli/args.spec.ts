@@ -152,7 +152,7 @@ describe("parseArgs: positionals and the -- terminator", () => {
   });
 
   it("returns empty collections for an empty argv", () => {
-    expect(parse([])).toEqual({ positionals: [], flags: {}, unknown: [] });
+    expect(parse([])).toEqual({ positionals: [], flags: {}, unknown: [], missingValue: [] });
   });
 });
 
@@ -168,15 +168,19 @@ describe("parseArgs: unknown and malformed input", () => {
     expect(parse(["--no-such-thing"]).unknown).toEqual(["--no-such-thing"]);
   });
 
-  it("routes a flag with a missing value to unknown", () => {
+  it("reports a flag with a missing value as missing, not as unknown", () => {
+    // "--out" is a real flag; calling it unknown made the CLI add
+    // "did you mean '--out'?", which is the same name twice.
     const args = parse(["--out"]);
-    expect(args.unknown).toEqual(["--out"]);
+    expect(args.missingValue).toEqual(["--out"]);
+    expect(args.unknown).toEqual([]);
     expect(args.flags["out"]).toBeUndefined();
   });
 
   it("treats a following flag as a missing value, not as the value", () => {
     const args = parse(["--out", "--json"]);
-    expect(args.unknown).toEqual(["--out"]);
+    expect(args.missingValue).toEqual(["--out"]);
+    expect(args.unknown).toEqual([]);
     expect(args.flags["out"]).toBeUndefined();
     // The next token is still parsed normally: the loop must not skip it.
     expect(flagBool(args, "json")).toBe(true);

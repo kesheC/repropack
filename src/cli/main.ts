@@ -74,18 +74,25 @@ function flagLine(spec: FlagSpec): string {
 
 /** Flags whose spelling is one edit away from something real; used in the error. */
 function suggestFlag(name: string, specs: readonly FlagSpec[]): string | null {
-  const candidates: string[] = [];
-  for (const spec of specs) {
-    candidates.push("--" + spec.name);
-    for (const alias of spec.aliases ?? []) candidates.push("-" + alias);
-  }
+  // Distance is measured on the bare name. Comparing the spelling from the
+  // command line against a spelling that always carries its dashes charged
+  // every candidate the same two edits for the prefix, and let a candidate
+  // identical to the input win -- which is how "--out" got told it might have
+  // meant "--out".
+  const bare = name.replace(/^--?/, "");
   let best: string | null = null;
   let bestDistance = Number.POSITIVE_INFINITY;
-  for (const candidate of candidates) {
-    const distance = editDistance(name, candidate);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      best = candidate;
+  for (const spec of specs) {
+    const spellings: [string, string][] = [["--" + spec.name, spec.name]];
+    for (const alias of spec.aliases ?? []) spellings.push(["-" + alias, alias]);
+    for (const [spelling, candidate] of spellings) {
+      // A flag the parser already knows is not a correction for itself.
+      if (candidate === bare) continue;
+      const distance = editDistance(bare, candidate);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = spelling;
+      }
     }
   }
   // Two edits covers a transposition (--scop / --scope) and a doubled letter;
@@ -119,7 +126,10 @@ function editDistance(a: string, b: string): number {
  * means a typo costs one error message instead of a confusing capture.
  */
 function rejectUnknown(args: ParsedArgs, command: CommandName): boolean {
-  if (args.unknown.length === 0) return false;
+  if (args.missingValue.length === 0 && args.unknown.length === 0) return false;
+  for (const flag of args.missingValue) {
+    process.stderr.write("error: " + flag + " needs a value\n");
+  }
   for (const flag of args.unknown) {
     const hint = suggestFlag(flag, SPECS[command]);
     process.stderr.write("error: unknown option '" + flag + "'" + (hint === null ? "\n" : "; did you mean '" + hint + "'?\n"));

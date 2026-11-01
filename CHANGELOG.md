@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A flag that is short of its value is no longer called an unknown flag.**
+  `repropack capture --out` answered `error: unknown option '--out'; did you
+  mean '--out'?` -- it denied the flag existed and then suggested the flag the
+  user had just typed. The parser now keeps the two failures apart: a known flag
+  with nothing after it reports `--out needs a value`, and only a name that
+  really is not in the table is reported as unknown.
+- **The "did you mean" hint no longer charges every candidate for its dashes.**
+  The distance was measured between the spelling from the command line
+  (`--nope`) and candidate spellings that always carry their dashes
+  (`--out`), so every candidate was charged the same two edits for the prefix
+  and the ranking was effectively noise: `--nope` was answered with
+  `did you mean '--scope'?`. Distances are now compared on the bare names, and a
+  candidate equal to what the user wrote is never offered back.
+
 ## [0.1.9] - 2026-11-01
 
 ### Added

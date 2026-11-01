@@ -170,6 +170,18 @@ Run `repropack --help` for every flag. The ones that matter most:
 Every command takes `--json` for piping into `jq`, and keeps machine output on
 stdout with human progress on stderr.
 
+A flag a command does not have is a usage error (exit 2), and so is a flag left
+without its value — the two are never confused:
+
+```text
+$ repropack capture --out
+error: --out needs a value
+hint: run 'repropack capture --help' for the supported options
+$ repropack capture --nope -- node -e 0
+error: unknown option '--nope'; did you mean '--scope'?
+hint: run 'repropack capture --help' for the supported options
+```
+
 ### The one trap: `--scope changed`
 
 The default scope is `changed`, which is right when the bug is in your
@@ -194,6 +206,17 @@ When in doubt, still pass `--scope all` and let `--max-bundle-bytes` do its job.
 全部 flag 见 `repropack --help`，最常调整的几个：`--scope changed|tracked|all` 默认 `changed`，只发送 git 认为有差异的文件，`all` 发送整个工作树；`--include <glob>` 强制把文件纳入、可重复；`--exclude <glob>` 把文件排除、可重复；`--max-file-bytes <n>` 默认 262144，单文件上限；`--max-bundle-bytes <n>` 默认 8388608，整包上限；`--timeout <ms>` 默认 300000，命令卡住就杀掉；`--no-git` 跳过仓库探测（没有 git，或当前目录不是仓库）。
 
 所有子命令都接受 `--json`，方便管道接 `jq`；机器输出始终在 stdout，人看的进度始终在 stderr。
+
+命令没有的 flag 是 usage error（exit 2），flag 后面没跟值同样是 usage error——两者不会混为一谈：
+
+```text
+$ repropack capture --out
+error: --out needs a value
+hint: run 'repropack capture --help' for the supported options
+$ repropack capture --nope -- node -e 0
+error: unknown option '--nope'; did you mean '--scope'?
+hint: run 'repropack capture --help' for the supported options
+```
 
 **这里有一个陷阱：`--scope changed`**
 
