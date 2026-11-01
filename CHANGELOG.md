@@ -24,9 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It now compares against `TOOL_VERSION`, which `tests/version.spec.ts` already
   ties to `package.json` -- drift still fails CI, a bump does not.
 - **Two guards the old test did not have.** The `repropack` bin is smoke tested
-  from the installed package, and `npm run build` now starts by clearing `dist/`
-  -- `clean` did not exist at v0.1.7, so any file tsc no longer emits survived in
-  `dist/` from an earlier build and `npm pack` shipped it.
+  from the installed package, and `npm run build` now clears `dist/` before
+  compiling -- `clean` did not exist at v0.1.7, so a file tsc no longer emits
+  survived an earlier build and `npm pack` shipped it. Until this release the
+  build wrote into whatever `dist/` was already on disk.
 
 ## [0.1.7] - 2026-11-01
 
