@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-11-02
+
 ### Fixed
 
 - **A closed pipe is an ending, not a crash.** `repropack report ./bundle | head -5` printed its
@@ -16,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   closed pipe as "the reader is done" and exits 0; stderr carries only
   progress and warnings, so an EPIPE there is swallowed and the command runs
   to the end. Any other stream error is still thrown.
+
+### Quality
+
+- 381 tests across 28 spec files, 4997 lines of TypeScript.
+- CI matrix: Ubuntu and Windows, Node 20 and 22.
+- Zero runtime dependencies.
 
 ## [0.1.11] - 2026-11-01
 
@@ -262,7 +270,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Zero runtime dependencies.
 
 [0.1.11]: https://github.com/kesheC/repropack/compare/v0.1.10...v0.1.11
-[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.11...HEAD
+[0.1.12]: https://github.com/kesheC/repropack/compare/v0.1.11...v0.1.12
+[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.12...HEAD
 [0.1.10]: https://github.com/kesheC/repropack/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/kesheC/repropack/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kesheC/repropack/compare/v0.1.7...v0.1.8
