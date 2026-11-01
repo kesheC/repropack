@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-11-01
+
+### Added
+
+- **The README is Chinese as well as English.** All twelve sections now carry a
+  Chinese counterpart directly below the English original -- same commands, same
+  transcripts, same caveats. 2,136 CJK characters, up from 22.
+
+### Fixed
+
+- **The 0.1.8 entries say what v0.1.7 actually guarded.** The "three guards the
+  old test did not have" bullet claimed guards the previous release already had;
+  `git show v0.1.7:package.json` has no `clean` script, so two of the three were
+  new and one was not. Version headings had no link definitions, so `[0.1.7]` and
+  `[0.1.8]` rendered as literal text, and `[Unreleased]` still compared against
+  v0.1.6.
+
+### Quality
+
+- 369 tests across 27 spec files, 4,836 lines of TypeScript.
+- CI matrix: Ubuntu and Windows, Node 20 and 22.
+- Zero runtime dependencies.
+
 ## [0.1.8] - 2026-11-01
 
 ### Added
@@ -168,7 +191,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI matrix: Ubuntu and Windows, Node 20 and 22.
 - Zero runtime dependencies.
 
-[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/kesheC/repropack/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kesheC/repropack/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/kesheC/repropack/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/kesheC/repropack/compare/v0.1.5...v0.1.6
