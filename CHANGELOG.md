@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `repropack --bogus` answered `error: unknown command '--bogus'` plus the whole
   usage page, which sends the reader looking for a subcommand. It now says
   `error: unknown option '--bogus'` and keeps the `did you mean` hint.
+- **A failure is a document too, not just a sentence.** Every error was written
+  to stderr where it was detected, so `repropack verify --json ./missing` exited
+  2 with an empty stdout: the caller that asked for machine output had nothing
+  to parse, and could not tell a failed run from one that found nothing. All
+  CLI failures now travel through one path that reports the same failure twice
+  -- `{"error":{"message":...,"exitCode":2}}` on stdout and the usual
+  `error:` line on stderr. `--json` after `--` still belongs to the captured
+  command, not to repropack.
 
 ## [0.1.10] - 2026-11-01
 

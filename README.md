@@ -168,7 +168,22 @@ Run `repropack --help` for every flag. The ones that matter most:
 | `--no-git` | — | Skip the repository probe (no git available, or not a repo). |
 
 Every command takes `--json` for piping into `jq`, and keeps machine output on
-stdout with human progress on stderr.
+stdout with human progress on stderr. That holds on failure too: the same
+error is written twice, as the sentence a person reads and as the document a
+wrapper parses.
+
+```console
+$ repropack verify --json ./missing-bundle; echo "exit=$?"
+{
+  "error": {
+    "message": "no such bundle: /home/you/missing-bundle",
+    "exitCode": 2
+  }
+}
+error: no such bundle: /home/you/missing-bundle
+hint: run 'verify --help' or check the path
+exit=2
+```
 
 A flag a command does not have is a usage error (exit 2), and so is a flag left
 without its value — the two are never confused:
@@ -205,7 +220,20 @@ When in doubt, still pass `--scope all` and let `--max-bundle-bytes` do its job.
 
 全部 flag 见 `repropack --help`，最常调整的几个：`--scope changed|tracked|all` 默认 `changed`，只发送 git 认为有差异的文件，`all` 发送整个工作树；`--include <glob>` 强制把文件纳入、可重复；`--exclude <glob>` 把文件排除、可重复；`--max-file-bytes <n>` 默认 262144，单文件上限；`--max-bundle-bytes <n>` 默认 8388608，整包上限；`--timeout <ms>` 默认 300000，命令卡住就杀掉；`--no-git` 跳过仓库探测（没有 git，或当前目录不是仓库）。
 
-所有子命令都接受 `--json`，方便管道接 `jq`；机器输出始终在 stdout，人看的进度始终在 stderr。
+所有子命令都接受 `--json`，方便管道接 `jq`；机器输出始终在 stdout，人看的进度始终在 stderr。失败时也一样：同一个错误写两遍，一遍是人读的句子，一遍是脚本能解析的文档。
+
+```console
+$ repropack verify --json ./missing-bundle; echo "exit=$?"
+{
+  "error": {
+    "message": "no such bundle: /home/you/missing-bundle",
+    "exitCode": 2
+  }
+}
+error: no such bundle: /home/you/missing-bundle
+hint: run 'verify --help' or check the path
+exit=2
+```
 
 命令没有的 flag 是 usage error（exit 2），flag 后面没跟值同样是 usage error——两者不会混为一谈：
 

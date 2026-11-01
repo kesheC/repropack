@@ -32,6 +32,53 @@ export const EXIT_USAGE = 2;
 export const EXIT_INTERNAL = 70;
 
 /**
+ * A failure the CLI reports itself, so both audiences get an answer.
+ *
+ * These messages used to be written to stderr where they happened, and the
+ * function returned the exit code. That left every `--json` caller with an
+ * empty stdout on failure: the one audience that cannot read a sentence had
+ * nothing to parse, and a wrapper had no way to tell an error from an empty
+ * result. Throwing here lets `main` report the same failure twice -- the human
+ * line on stderr, the document on stdout, exactly as a result is reported.
+ */
+class CliFailure extends Error {
+  readonly messages: readonly string[];
+  readonly details: readonly string[];
+  readonly hints: readonly string[];
+  readonly exitCode: number;
+
+  constructor(
+    messages: readonly string[] | string,
+    options: { details?: readonly string[]; hints?: readonly string[]; exitCode?: number } = {},
+  ) {
+    const list = typeof messages === "string" ? [messages] : messages;
+    super(list[0] ?? "repropack: error");
+    this.messages = list;
+    this.details = options.details ?? [];
+    this.hints = options.hints ?? [];
+    this.exitCode = options.exitCode ?? EXIT_USAGE;
+  }
+}
+
+/**
+ * Whether the line asks for machine output, judged from the raw tokens.
+ *
+ * `main` needs this before any spec table is in hand: "no command given",
+ * "unknown command" and a stray token after `--help` all happen at the top
+ * level, and each of them still owes a `--json` caller a document. The scan
+ * stops at `--`, because what follows belongs to the captured command --
+ * `capture -- node --json` is not asking repropack for JSON.
+ */
+function wantsJson(argv: readonly string[]): boolean {
+  for (const token of argv) {
+    if (token === "--") break;
+    if (token === "--json") return true;
+    if (token.startsWith("--json=")) return token.slice("--json=".length) !== "false";
+  }
+  return false;
+}
+
+/**
  * Render help for one command, or for the tool as a whole.
  *
  * Generated from the flag table rather than typed out beside it. The two copies
@@ -134,10 +181,9 @@ function editDistance(a: string, b: string): number {
  * request.
  */
 function sharedOptionError(args: ParsedArgs, command: CommandName): number | null {
-  if (rejectUnknown(args, command)) return EXIT_USAGE;
+  rejectUnknown(args, command);
   if (flagBool(args, "version")) {
-    process.stderr.write("error: --version is not supported by '" + command + "'; it applies to 'repropack --version' on its own\n");
-    return EXIT_USAGE;
+    throw new CliFailure("--version is not supported by '" + command + "'; it applies to 'repropack --version' on its own");
   }
   if (flagBool(args, "help")) {
     process.stdout.write(renderHelp(command));
@@ -155,19 +201,20 @@ function sharedOptionError(args: ParsedArgs, command: CommandName): number | nul
 const ALL_FLAGS: readonly FlagSpec[] = [...new Set(COMMANDS.flatMap((name) => SPECS[name]))];
 
 /** The tokens after `--help` or `--version`, which take none. */
-function rejectStrayAfter(verb: string, rest: readonly string[]): number | null {
+function rejectStrayAfter(verb: string, rest: readonly string[]): void {
   const stray = rest[0];
-  if (stray === undefined) return null;
+  if (stray === undefined) return;
+  const hints = ["run 'repropack --help' for the usage"];
   if (stray.startsWith("-")) {
     // 'repropack --help --bogus' used to print the help and exit 0, which is
     // indistinguishable from a clean run to anything wrapping the command.
     const hint = suggestFlag(stray, ALL_FLAGS);
-    process.stderr.write("error: unknown option '" + stray + "'" + (hint === null ? "\n" : "; did you mean '" + hint + "'?\n"));
-  } else {
-    process.stderr.write("error: unexpected argument '" + stray + "' after " + verb + "\n");
+    throw new CliFailure(
+      "unknown option '" + stray + "'" + (hint === null ? "" : "; did you mean '" + hint + "'?"),
+      { hints },
+    );
   }
-  process.stderr.write("hint: run 'repropack --help' for the usage\n");
-  return EXIT_USAGE;
+  throw new CliFailure("unexpected argument '" + stray + "' after " + verb, { hints });
 }
 
 /**
@@ -178,44 +225,68 @@ function rejectStrayAfter(verb: string, rest: readonly string[]): number | null 
  * --scop all -- node x' warned and then ran the command 'all'. Failing here
  * means a typo costs one error message instead of a confusing capture.
  */
-function rejectUnknown(args: ParsedArgs, command: CommandName): boolean {
-  if (args.missingValue.length === 0 && args.unknown.length === 0) return false;
-  for (const flag of args.missingValue) {
-    process.stderr.write("error: " + flag + " needs a value\n");
-  }
+function rejectUnknown(args: ParsedArgs, command: CommandName): void {
+  if (args.missingValue.length === 0 && args.unknown.length === 0) return;
+  const messages: string[] = [];
+  for (const flag of args.missingValue) messages.push(flag + " needs a value");
   for (const flag of args.unknown) {
     const hint = suggestFlag(flag, SPECS[command]);
-    process.stderr.write("error: unknown option '" + flag + "'" + (hint === null ? "\n" : "; did you mean '" + hint + "'?\n"));
+    messages.push("unknown option '" + flag + "'" + (hint === null ? "" : "; did you mean '" + hint + "'?"));
   }
-  process.stderr.write("hint: run 'repropack " + command + " --help' for the supported options\n");
-  return true;
+  throw new CliFailure(messages, { hints: ["run 'repropack " + command + " --help' for the supported options"] });
 }
 
 /**
  * Entry point. Returns the process exit code rather than calling
  * `process.exit`, so the same function is usable from tests and from the
  * library without taking down an embedding process.
+ *
+ * Every failure funnels through here so it can be written twice: as the
+ * sentence a person reads and as the document a `--json` wrapper parses.
  */
 export async function main(argv: readonly string[]): Promise<number> {
+  const json = wantsJson(argv);
+  try {
+    return await dispatch(argv);
+  } catch (error) {
+    if (!(error instanceof CliFailure)) throw error;
+    if (json) {
+      const document: Record<string, unknown> = {
+        message: error.messages.join("; "),
+        exitCode: error.exitCode,
+      };
+      if (error.details.length > 0) document.details = error.details;
+      process.stdout.write(JSON.stringify({ error: document }, null, 2) + "\n");
+    }
+    for (const message of error.messages) writeLine(process.stderr, "error: " + message);
+    for (const detail of error.details) writeLine(process.stderr, detail);
+    for (const hint of error.hints) writeLine(process.stderr, "hint: " + hint);
+    return error.exitCode;
+  }
+}
+
+/** Write one report line, adding the newline only when it is missing. */
+function writeLine(stream: { write(text: string): unknown }, text: string): void {
+  stream.write(text.endsWith("\n") ? text : text + "\n");
+}
+
+async function dispatch(argv: readonly string[]): Promise<number> {
   const [command, ...rest] = argv;
 
   if (command === undefined) {
     // Printing help and succeeding looks the same as doing what was asked. A
     // caller that forgot the argument should find out.
-    process.stderr.write("error: no command given\n\n" + renderHelp(null));
-    return EXIT_USAGE;
+    throw new CliFailure("no command given", { details: ["\n" + renderHelp(null)] });
   }
   if (command === "--help" || command === "-h" || command === "help") {
-    const refused = rejectStrayAfter("--help", rest);
-    if (refused !== null) return refused;
+    rejectStrayAfter("--help", rest);
     process.stdout.write(renderHelp(null));
     return EXIT_OK;
   }
   if (command === "--version" || command === "version") {
     // Nothing may follow. '--version --bogus' used to print the version and
     // exit 0, so an unrecognised word was answered as if it had been read.
-    const refused = rejectStrayAfter("--version", rest);
-    if (refused !== null) return refused;
+    rejectStrayAfter("--version", rest);
     process.stdout.write(TOOL_VERSION + "\n");
     return 0;
   }
@@ -239,12 +310,12 @@ export async function main(argv: readonly string[]): Promise<number> {
       // meant to type.
       if (command.startsWith("-")) {
         const hint = suggestFlag(command, ALL_FLAGS);
-        process.stderr.write("error: unknown option '" + command + "'" + (hint === null ? "\n" : "; did you mean '" + hint + "'?\n"));
-        process.stderr.write("hint: run 'repropack --help' for the usage\n");
-        return EXIT_USAGE;
+        throw new CliFailure(
+          "unknown option '" + command + "'" + (hint === null ? "" : "; did you mean '" + hint + "'?"),
+          { hints: ["run 'repropack --help' for the usage"] },
+        );
       }
-      process.stderr.write("error: unknown command '" + command + "'\n\n" + renderHelp(null));
-      return EXIT_USAGE;
+      throw new CliFailure("unknown command '" + command + "'", { details: ["\n" + renderHelp(null)] });
   }
 }
 
@@ -255,14 +326,12 @@ async function runCapture(argv: readonly string[]): Promise<number> {
   const log = createLogger({ quiet: flagBool(args, "quiet"), verbose: flagBool(args, "verbose") });
 
   if (args.positionals.length === 0) {
-    process.stderr.write("error: capture needs a command after --\n");
-    return EXIT_USAGE;
+    throw new CliFailure("capture needs a command after --");
   }
 
   const scope = parseScope(flagString(args, "scope"));
   if (scope === null) {
-    process.stderr.write("error: --scope must be one of changed, tracked, all\n");
-    return EXIT_USAGE;
+    throw new CliFailure("--scope must be one of changed, tracked, all");
   }
 
   const out = resolve(flagString(args, "out") ?? "repropack-bundle");
@@ -303,14 +372,12 @@ async function runReplay(argv: readonly string[]): Promise<number> {
 
   const bundle = args.positionals[0];
   if (!bundle) {
-    process.stderr.write("error: replay needs a bundle directory\n");
-    return EXIT_USAGE;
+    throw new CliFailure("replay needs a bundle directory");
   }
   // route the path through the shared guard: a missing directory used to reach
   // replay() as a raw stat/ENOENT and exit 70, the code reserved for repropack
   // itself failing.
   const root = resolveBundlePath(bundle, "replay");
-  if (root === null) return EXIT_USAGE;
 
   const workdir = flagString(args, "workdir");
   const result = await replay({
@@ -344,12 +411,10 @@ async function runVerify(argv: readonly string[]): Promise<number> {
 
   const bundle = args.positionals[0];
   if (!bundle) {
-    process.stderr.write("error: verify needs a bundle directory\n");
-    return EXIT_USAGE;
+    throw new CliFailure("verify needs a bundle directory");
   }
 
   const root = resolveBundlePath(bundle, "verify");
-  if (root === null) return EXIT_USAGE;
 
   const result: VerifyResult = await verifyBundle(root, { strict: flagBool(args, "strict") });
   if (flagBool(args, "json")) {
@@ -369,12 +434,12 @@ async function runVerify(argv: readonly string[]): Promise<number> {
  * exit 70 (the "internal error" code), which reads like a repropack bug rather
  * than a typo in the argument.
  */
-function resolveBundlePath(target: string, command: string): string | null {
+function resolveBundlePath(target: string, command: string): string {
   const root = resolve(target);
   if (!existsSync(root)) {
-    process.stderr.write("error: no such bundle: " + root + "\n");
-    process.stderr.write("hint: run '" + command + " --help' or check the path\n");
-    return null;
+    throw new CliFailure("no such bundle: " + root, {
+      hints: ["run '" + command + " --help' or check the path"],
+    });
   }
   return root;
 }
@@ -386,11 +451,9 @@ async function runInspect(argv: readonly string[]): Promise<number> {
 
   const bundle = args.positionals[0];
   if (!bundle) {
-    process.stderr.write("error: inspect needs a bundle directory\n");
-    return EXIT_USAGE;
+    throw new CliFailure("inspect needs a bundle directory");
   }
   const root = resolveBundlePath(bundle, "inspect");
-  if (root === null) return EXIT_USAGE;
   const loaded = await readBundle(root);
   if (flagBool(args, "json")) {
     process.stdout.write(JSON.stringify(loaded.manifest, null, 2) + "\n");
@@ -412,19 +475,18 @@ async function runPack(argv: readonly string[]): Promise<number> {
 
   const target = args.positionals[0];
   if (!target) {
-    process.stderr.write("error: pack needs a bundle directory\n");
-    return EXIT_USAGE;
+    throw new CliFailure("pack needs a bundle directory");
   }
 
   const root = resolveBundlePath(target, "pack");
-  if (root === null) return EXIT_USAGE;
   const loaded = await readBundle(root);
   if (loaded.problems.length > 0) {
     // A bundle that does not verify should not be handed to a stranger. The
     // archive is the thing people publish, so this is the last cheap stop.
-    process.stderr.write("error: refusing to pack a bundle that does not verify\n");
-    for (const problem of loaded.problems) process.stderr.write("  - " + problem + "\n");
-    return EXIT_FINDINGS;
+    throw new CliFailure("refusing to pack a bundle that does not verify", {
+      details: loaded.problems.map((problem) => "  - " + problem),
+      exitCode: EXIT_FINDINGS,
+    });
   }
 
   // The manifest agreeing with itself is not the same as the bundle being safe
@@ -436,13 +498,17 @@ async function runPack(argv: readonly string[]): Promise<number> {
   const blockers = verdict.findings.filter((finding) => finding.severity === "blocker");
   const allow = flagBool(args, "force");
   if (blockers.length > 0 && !allow) {
-    process.stderr.write("error: refusing to pack a bundle that does not verify\n");
-    for (const finding of blockers) {
-      process.stderr.write("  - " + finding.code + (finding.path === undefined ? "" : " " + finding.path) + ": " + finding.message + "\n");
-    }
-    process.stderr.write("hint: run 'repropack verify " + target + "' to see every finding\n");
-    process.stderr.write("hint: pass --force to pack anyway (the archive is what people publish)\n");
-    return EXIT_FINDINGS;
+    throw new CliFailure("refusing to pack a bundle that does not verify", {
+      details: blockers.map(
+        (finding) =>
+          "  - " + finding.code + (finding.path === undefined ? "" : " " + finding.path) + ": " + finding.message,
+      ),
+      hints: [
+        "run 'repropack verify " + target + "' to see every finding",
+        "pass --force to pack anyway (the archive is what people publish)",
+      ],
+      exitCode: EXIT_FINDINGS,
+    });
   }
   if (allow) {
     for (const finding of verdict.findings.filter((item) => item.severity !== "note")) {
@@ -454,8 +520,7 @@ async function runPack(argv: readonly string[]): Promise<number> {
   const mtimeRaw = flagString(args, "mtime");
   const mtime = mtimeRaw === undefined ? undefined : Number(mtimeRaw);
   if (mtime !== undefined && !Number.isFinite(mtime)) {
-    process.stderr.write("error: --mtime must be a number of seconds since the epoch\n");
-    return EXIT_USAGE;
+    throw new CliFailure("--mtime must be a number of seconds since the epoch");
   }
 
   const packed = await packBundle({ root, out, mtime });
@@ -476,12 +541,10 @@ async function runReport(argv: readonly string[]): Promise<number> {
 
   const target = args.positionals[0];
   if (!target) {
-    process.stderr.write("error: report needs a bundle directory\n");
-    return EXIT_USAGE;
+    throw new CliFailure("report needs a bundle directory");
   }
 
   const root = resolveBundlePath(target, "report");
-  if (root === null) return EXIT_USAGE;
   const loaded = await readBundle(root);
   const report = await buildReport({
     bundle: loaded.manifest,

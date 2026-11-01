@@ -360,7 +360,11 @@ describe("main: capture end to end", () => {
         expect(code).toBe(2);
         expect(io.stderr()).toContain("unknown option '--nope'");
         expect(io.stderr()).toContain("hint: run 'repropack capture --help'");
-        expect(io.stdout()).toBe("");
+        // --json was on the line, so the same failure is also a document: a
+        // wrapper that asked for machine output got an empty stdout before.
+        expect(JSON.parse(io.stdout())).toEqual({
+          error: { message: "unknown option '--nope'; did you mean '--scope'?", exitCode: 2 },
+        });
         expect(existsSync(join(fixture.out, "bundle.json"))).toBe(false);
       } finally {
         process.chdir(previous);
@@ -451,6 +455,44 @@ describe("main: capture end to end", () => {
     expect(io.stdout()).toBe("");
     expect(io.stderr()).toContain("unknown option '--bogus'");
   });
+  it("answers a --json caller with a document even when the run fails", async () => {
+    // Every failure used to be a sentence on stderr, written where the failure
+    // was detected and followed by a bare exit code. A wrapper that passed
+    // --json got an empty stdout and had to guess what went wrong.
+    const cases: [string[], string][] = [
+      [["verify", "--json", "/definitely-not-a-bundle"], "no such bundle"],
+      [["inspect", "--json"], "inspect needs a bundle directory"],
+      [["pack", "--json", "--bogus", "x"], "unknown option '--bogus'"],
+      [["--bogus", "--json"], "unknown option '--bogus'"],
+      [["no-such-command", "--json"], "unknown command 'no-such-command'"],
+    ];
+    for (const [argv, expected] of cases) {
+      const io = captureIo();
+      expect(await main(argv)).toBe(2);
+      const parsed = JSON.parse(io.stdout()) as { error: { message: string; exitCode: number } };
+      expect(parsed.error.message).toContain(expected);
+      expect(parsed.error.exitCode).toBe(2);
+      // The human sentence is still there: one failure, two audiences.
+      expect(io.stderr()).toContain("error: ");
+    }
+  });
+
+  it("keeps stdout empty on failure when --json was not asked for", async () => {
+    const io = captureIo();
+    expect(await main(["verify", "/definitely-not-a-bundle"])).toBe(2);
+    expect(io.stdout()).toBe("");
+    expect(io.stderr()).toContain("error: no such bundle: ");
+  });
+
+  it("does not read --json from the command it captures", async () => {
+    // `capture -- node --json` asks node for JSON, not repropack: everything
+    // after the separator belongs to the child.
+    const io = captureIo();
+    expect(await main(["capture", "--bogus", "--", "node", "--json"])).toBe(2);
+    expect(io.stdout()).toBe("");
+    expect(io.stderr()).toContain("unknown option '--bogus'");
+  });
+
   it("never suggests the flag the user already wrote", async () => {
     // "--nope" is two edits from "--scope", so the suggestion itself is fine;
     // what must never happen is a suggestion equal to the input.
