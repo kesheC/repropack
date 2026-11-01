@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A closed pipe is an ending, not a crash.** `repropack report ./bundle | head -5` printed its
+  first lines and then died with `Error: write EPIPE` and exit 1: the reader
+  had what it wanted, Node raised an error event on stdout, and nothing was
+  listening, so a finished run looked like a failed one. stdout now reads a
+  closed pipe as "the reader is done" and exits 0; stderr carries only
+  progress and warnings, so an EPIPE there is swallowed and the command runs
+  to the end. Any other stream error is still thrown.
+
 ## [0.1.11] - 2026-11-01
 
 ### Fixed

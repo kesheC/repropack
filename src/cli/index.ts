@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { main } from "./main.js";
+import { installPipeGuard } from "./pipe.js";
+
+installPipeGuard();
 
 const code = await main(process.argv.slice(2)).catch((error: unknown) => {
   process.stderr.write("fatal: " + (error as Error).message + "\n");
