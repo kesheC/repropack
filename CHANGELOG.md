@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-11-01
+
 ### Fixed
 
 - **A flag that is short of its value is no longer called an unknown flag.**
@@ -22,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the ranking was effectively noise: `--nope` was answered with
   `did you mean '--scope'?`. Distances are now compared on the bare names, and a
   candidate equal to what the user wrote is never offered back.
+
+### Quality
+
+- 371 tests across 27 spec files, 4,856 lines of TypeScript.
+- CI matrix: Ubuntu and Windows, Node 20 and 22.
+- Zero runtime dependencies.
 
 ## [0.1.9] - 2026-11-01
 
@@ -207,7 +215,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI matrix: Ubuntu and Windows, Node 20 and 22.
 - Zero runtime dependencies.
 
-[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/kesheC/repropack/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/kesheC/repropack/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kesheC/repropack/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/kesheC/repropack/compare/v0.1.6...v0.1.7
