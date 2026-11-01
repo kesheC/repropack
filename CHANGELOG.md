@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-11-01
+
+### Added
+
+- **Unknown options are a usage error, with a suggestion.** A typo like `--ou`
+  instead of `--out` used to be ignored, so the archive went to the default
+  path while the caller believed they had chosen it. Every command now rejects
+  an option outside its own flag table and offers the nearest name by edit
+  distance.
+- **`pack` runs the verify pass before it writes an archive.** A bundle whose
+  manifest agrees with itself can still carry a stray `.env` next to the logs,
+  and `pack` compressed that straight into the file people attach to an issue.
+  Blockers now stop the pack; `--force` packs anyway and prints what it let
+  through.
+- **`replay` compares the recorded stderr after the exit codes agree.** Two
+  different crashes that both exit 1 used to read as a faithful reproduction.
+  A drifted first stderr line is now its own outcome, reported as drift rather
+  than as success.
+
+### Changed
+
+- **Exit codes are named constants.** `EXIT_OK` / `EXIT_FINDINGS` /
+  `EXIT_USAGE` / `EXIT_INTERNAL` replace the bare integers, so a script can
+  tell "the bundle has findings" from "you called me wrong".
+- **`--help` is generated from the flag tables.** An option that exists but is
+  undocumented is no longer possible.
+
+### Fixed
+
+- **The repository root is redacted before it reaches `bundle.json`.** A
+  bundle captured inside a home directory used to record that absolute path.
+- **The command line is redacted in `capture`'s progress output.** It was
+  already redacted in the bundle, but the terminal echoed it.
+
+### Security
+
+- `pack` is a new exit for a bundle that carries a blocker, so the last cheap
+  gate before a bundle leaves the machine is now enforced by the tool.
 ## [0.1.6] - 2026-11-01
 
 ### Changed
