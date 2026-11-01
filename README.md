@@ -34,60 +34,106 @@ one command — no clone, no install, no account.
 ## What it actually does / 它到底做什么
 
 ```sh
-repropack capture -- npm test        # run it, record it, redact it
-repropack verify ./repropack-bundle  # audit before it leaves your machine
-repropack pack ./repropack-bundle    # one .repropack file to attach
-repropack replay demo.repropack      # on the other machine: same failure, same exit code
+cd demo                                   # the sample project below lives here
+repropack capture --scope all --out ./bundle -- node src/main.js   # record it
+repropack verify ./bundle                 # audit before it leaves your machine
+repropack pack ./bundle --out demo.repropack   # one .repropack file to attach
+repropack replay demo.repropack           # on the other machine: same failure, same exit code
 ```
+
+That is the whole loop. Two of those flags are doing real work. `--scope all`:
+the default scope is `changed`, which in a tree with nothing modified captures
+almost nothing. And `--out` on `pack`: without it the archive is named after the
+bundle id (`ea7df4bbc418.repropack`), so the next line would be replaying a file
+that is not there.
 
 A real run, from the [`demo/`](demo) in this repository — a percent calculator
 that divides by zero and throws:
 
 ```console
-$ node src/main.js
+$ cd demo
+$ node src/main.js; echo "exit=$?"
 widgets -> 25.0%
+file:///…/demo/src/main.js:13
+    throw new Error("share for " + row.category + " is not a finite number: " + share);
+          ^
+
 Error: share for gadgets is not a finite number: NaN
     at file:///…/demo/src/main.js:13:11
-$ echo $?
-1
+    …
+exit=1
 ```
 
 Capture it:
 
 ```console
-$ repropack capture --scope all --out ./bundle -- node src/main.js
+$ repropack capture --no-git --scope all --out ./bundle -- node src/main.js
 running node src/main.js
-bundle written to …/bundle
-repropack bundle 755cc509efb8
-  created       2026-10-29T17:26:51.471Z
+bundle written to …/demo/bundle
+repropack bundle 1ee1e0af329a
+  created       2026-11-01T20:52:46.546Z
   command       node src/main.js
   exit          1
-  duration      68ms
+  duration      67ms
   node          v24.22.1 (win32/x64)
   repo          none
   files         4 (1.3 KB)
   redacted      2 match(es) in 2 rule(s)
 ```
 
-Four files, 1.3 KB, and two secrets already replaced with placeholders. Now
-replay it anywhere — a different directory, a different machine, a different OS:
+Four files, 1.3 KB, and two secrets already replaced with placeholders. Then
+pack it into the one file you would actually attach, and replay that file
+anywhere — a different directory, a different machine, a different OS:
 
 ```console
-$ repropack replay ./demo.repropack
+$ repropack pack ./bundle --out demo.repropack
+packed 10 file(s) into …/demo/demo.repropack
+$ cd /tmp && repropack replay /home/you/repropack/demo/demo.repropack; echo "exit=$?"
 widgets -> 25.0%
+file:///…/repropack-replay-Z2646b/src/main.js:13
+    throw new Error("share for " + row.category + " is not a finite number: " + share);
+          ^
+
 Error: share for gadgets is not a finite number: NaN
-    at file:///…/src/main.js:13:11
+    at file:///…/repropack-replay-Z2646b/src/main.js:13:11
+    …
 replayed faithfully (exit 1)
+exit=0
 ```
 
-That is the whole point: the reporter's `NaN` becomes your `NaN`, with no
-back-and-forth.
+Nothing was cloned and nothing was installed on that side: the archive carries
+the four files the failure touched.
+
+Two things in that transcript are not typos. `repropack replay` exits `0` when
+the replay was faithful — the recorded exit code is `1`, and the last line says
+so; a non-zero status from `replay` means the replay itself is in doubt, which
+is a different and more urgent fact. And the bundle id, the capture timestamp
+and the duration are different on every run, so the numbers above are one real
+capture rather than literals to compare against.
+
+Node's own stack frames (`at ModuleJob.run (node:internal/…)`) are elided: they
+belong to Node rather than to the failing program, and they change shape between
+Node releases. Everything else is verbatim.
 
 **中文：**
 
-四条命令各做一件事：`capture` 运行命令并记录、脱敏；`verify` 在产物离开你机器之前做一次审计；`pack` 把目录收成单个 `.repropack` 文件；`replay` 在另一台机器上重放同一个失败、拿到同一个退出码。
+四条命令各做一件事：`capture` 运行命令并记录、脱敏；`verify` 在产物离开你机器之前做一次审计；`pack` 把目录收成单个 `.repropack` 文件；`replay` 在另一台机器上重放同一个失败。
 
-上面第二个 console 块展示了一次真实抓取：运行失败的命令，bundle 被写到目录里，然后是清单摘要——bundle id、创建时间、命令、退出码、耗时 68ms、Node 版本 v24.22.1（win32/x64）、仓库为 none、4 个文件共 1.3 KB、2 条命中分布在 2 条规则上。第三个 console 块是重放：拿到同样的退出码 1，并注明「replayed faithfully」。
+这段里有两个 flag 在做实事。`--scope all`：默认 scope 是 `changed`，在工作树没有改动时几乎抓不到东西。`pack` 的 `--out`：不给的话归档会按 bundle id 命名（`ea7df4bbc418.repropack`），下一行要重放的文件就不存在。
+
+示例都从本仓库的 `demo/` 目录开始跑——必须先 `cd demo`，因为示例程序在那里，仓库根没有 `src/main.js`。第一个 console 块是原始的失败：算出 `widgets -> 25.0%` 之后在 `gadgets` 那一行除以零得到 `NaN`，抛出未捕获异常，退出码 1。
+
+第二个块是一次真实抓取：命令被运行，bundle 写到 `./bundle`，随后是清单摘要——bundle id、创建时间、命令、退出码、耗时、Node 版本、仓库信息、4 个文件共 1.3 KB、2 条命中分布在 2 条规则上。这里用 `--no-git` 让输出与机器上的 git 状态无关；在你自己的仓库里去掉它，`repo` 一行就会显示当前提交。
+
+第三个块把 bundle 打成单个 `demo.repropack`，换到 `/tmp` 里用**绝对路径**重放，得到同样的 `NaN` 和「replayed faithfully (exit 1)」。这条绝对路径不是啰嗦：`./demo.repropack` 是相对于你当前所在目录解析的，而这一段的重点恰恰是「换到别的目录」。归档里带着失败触及的那四个文件——对面不需要 clone，也不需要装任何东西。
+
+那份转录里有两处不是笔误，值得说清楚：
+
+**其一，`repropack replay` 自己的退出码是 0。** 记录下来的退出码是 1，最后一行「replayed faithfully (exit 1)」如实报告了它。重放忠实即成功；`replay` 自己返回非零意味着这次重放本身不可信（文件缺失、哈希对不上），是另一件更紧急的事。
+
+**其二，bundle id、抓取时间、耗时每次都不一样。** 上面那组数字来自一次真实抓取，不是可以逐字比对的字面量。同理，重放时的临时目录名（`repropack-replay-Z2646b`）每次不同。
+
+Node 自己的栈帧（`at ModuleJob.run (node:internal/…)`）被省略了：它们属于 Node 而非失败的程序，而且随 Node 版本变形。其余内容逐字照搬。
 
 这就是全部意义：报错的人看到的 `NaN`，变成你看到的 `NaN`，中间不需要来回。
 
@@ -212,7 +258,12 @@ for the wrong reason. Imports that leave the project, and anything in
 `node_modules`, stay out.
 
 When in doubt, still pass `--scope all` and let `--max-bundle-bytes` do its job.
-`verify` tells you if a bundle looks thin.
+
+`verify` does not grade how thin a bundle is. It reports findings, and a bundle
+of two files passes clean — the same `ok (0 finding(s))` as a full one. What
+tells you the thickness is the `files` line that `capture` and `inspect` print:
+the demo above is `files 4 (1.3 KB)` with `--scope all` and `files 2 (959 B)`
+with the default `--scope changed`.
 
 **中文：**
 
@@ -252,7 +303,7 @@ hint: run 'repropack capture --help' for the supported options
 
 栈帧能缓解这一点。无论选哪个 scope，capture 都会把栈帧里提到的文件扩展到它们在本地的 import 闭包——从抛错的那一帧出发跟随 `./mathy.js`，再跟随那个文件 import 的东西——所以一个很小的 bundle 也能真正跑起来，而不是以 `ERR_MODULE_NOT_FOUND` 死掉、因为错误的原因「复现」了退出码。离开本项目的 import 和 `node_modules` 里的东西不会被打进去。
 
-拿不准时就传 `--scope all`，让 `--max-bundle-bytes` 去拦超量；`verify` 会告诉你 bundle 是不是太薄。
+拿不准时就传 `--scope all`，让 `--max-bundle-bytes` 去拦超量。`verify` 不评价 bundle 的厚薄：它只报发现项，两个文件的包照样是 `ok (0 finding(s))`。要看厚薄，读 `capture` 和 `inspect` 打的 `files` 那行——同一个 demo，`--scope all` 是 `files 4 (1.3 KB)`，默认的 `--scope changed` 只有 `files 2 (959 B)`。
 
 `--help` and `--version` do not swallow the rest of the line. A mistyped
 flag is reported before the usage page is printed, and `--version` answers only
@@ -303,9 +354,19 @@ bundle/
 ```
 
 `bundle.json` carries a SHA-256 over a canonical serialisation, and every file
-carries its own hash. Replay refuses to call a run faithful when a file is
-missing or its hash no longer matches — a corrupted bundle fails loudly instead
-of producing a confusing "the test passes now".
+carries its own hash. Change one captured file after the fact and `verify` names
+it:
+
+```console
+$ repropack verify ./bundle; echo "exit=$?"
+  blocker integrity-mismatch        files/src/calculator.js: content hash does not match its manifest entry; the payload changed after capture, so replay would rebuild something that never ran
+not ok (1 finding(s))
+exit=1
+```
+
+Replay agrees, from the other side. When the payload no longer matches, the run
+is not faithful, so `replay` exits non-zero instead of printing the recorded
+code — and stdout stays empty, because there is no faithful transcript to show.
 
 The `.repropack` archive is a plain gzipped tar, so `tar -xf` works too, and
 nothing here needs repropack installed to inspect.
@@ -314,7 +375,9 @@ nothing here needs repropack installed to inspect.
 
 bundle 目录的固定结构：`bundle.json` 是清单，记录命令、argv、退出码、环境与文件哈希；`files/` 是失败触及的源码树，已脱敏；`logs/` 下是捕获的输出，`stdout.txt` 与 `stderr.txt` 都已脱敏，过长时保留尾部；`Dockerfile` 由记录下来的环境推导；`replay.sh` 是 POSIX 入口，从 `files/` 里运行；`replay.cmd` 是对应的 Windows 版本。
 
-`bundle.json` 里带有对规范序列化结果的 SHA-256，每个文件也各自带哈希。文件缺失或哈希对不上时，replay 会拒绝宣称这次重放是「忠实的」——损坏的 bundle 会明确报错，而不是产生一个令人困惑的「测试现在通过了」。
+`bundle.json` 里带有对规范序列化结果的 SHA-256，每个文件也各自带哈希。抓完之后改动任何一个被捕获的文件，`verify` 会点名它：`blocker integrity-mismatch`、指出是 `files/src/calculator.js` 的内容哈希与清单不符，然后 `not ok (1 finding(s))` 并以 1 退出。
+
+replay 从另一侧给出同样的判决：载荷一旦与清单不符，这次运行就不再忠实，`replay` 会以非零退出，而不是打印记录下来的那个退出码——此时 stdout 是空的。
 
 `.repropack` 归档就是普通的 gzip 过的 tar，所以 `tar -xf` 也能解开；查看内容完全不需要装 repropack。
 
@@ -341,6 +404,19 @@ ok (0 finding(s))
 ```
 
 It exits non-zero on blockers, so it works as a pre-publish gate in a script.
+Drop a file the scanners still recognise — here one holding a GitHub-shaped token
+at `files/leak.js` — into an otherwise clean bundle and the same command says so
+instead:
+
+```console
+$ repropack verify ./bundle; echo "exit=$?"
+  blocker leak-suspected            files/leak.js: redaction rule "github-token" still matches 1 time; this surface must not be published as it stands
+not ok (1 finding(s))
+exit=1
+```
+
+A blocker is the bundle saying "do not publish this". A `note` — an absolute
+path, say — is reported but does not fail the run.
 
 **中文：**
 
@@ -349,6 +425,10 @@ It exits non-zero on blockers, so it works as a pre-publish gate in a script.
 命令行本身也会被脱敏，因为它是唯一会原样进入 issue 的字段：一个作为参数传进去的 token，否则会在标题和表格里各被公开一次。
 
 `repropack verify` 会重新扫描一个已完成的 bundle，报告有什么残留下来。把任何东西贴到公开 issue 之前先跑它，输出应为 `no findings` 与 `ok (0 finding(s))`。它在存在阻断项时以非零退出，因此可以在脚本里当作发布前门禁。
+
+往一个本来干净的 bundle 里塞一个扫描器仍能识别的文件，同一条命令就会立刻改口：报出 `blocker leak-suspected`、说明是哪条规则、还是命中几次，然后 `not ok (1 finding(s))` 并以 1 退出。
+
+`blocker` 是 bundle 在说「这个不能发」。相对地，`note`（比如某条绝对路径）会被报告但不让命令失败——两者语气不同，脚本里只该拦前者。
 
 ## Library API / 库 API
 
