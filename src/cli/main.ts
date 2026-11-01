@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { parseArgs, flagString, flagBool, flagNumber, flagList, type FlagSpec } from "./args.js";
+import { parseArgs, flagString, flagBool, flagNumber, flagList, type FlagSpec, type ParsedArgs } from "./args.js";
+import { COMMANDS, SPECS, SYNOPSIS, CAPTURE, REPLAY, VERIFY, INSPECT, PACK, REPORT, type CommandName } from "./specs.js";
 import { formatBundle, formatVerify } from "./format.js";
 import { capture } from "../capture/index.js";
 import { replay } from "../replay/index.js";
@@ -13,91 +14,119 @@ import { redactText } from "../redact/index.js";
 import { TOOL_VERSION } from "../version.js";
 import type { CaptureScope, VerifyResult } from "../types.js";
 
-const USAGE = `repropack — pack a failing run into something another machine can replay
+const INTRO = "repropack — pack a failing run into something another machine can replay";
 
-Usage:
-  repropack capture [options] -- <command> [args...]
-  repropack replay  [options] <bundle-dir>
-  repropack verify  [options] <bundle-dir>
-  repropack inspect [options] <bundle-dir>
-  repropack pack    [options] <bundle-dir>
-  repropack report  [options] <bundle-dir>
-  repropack --help | --version
+/**
+ * Exit codes, in one place because they are part of the interface.
+ *
+ * Before this existed the codes were whatever fell out of each branch: a typo in
+ * a path was 2 from inspect and 70 from replay, and 70 also meant a genuine
+ * internal crash, so a caller could not tell its own mistake from ours.
+ */
+export const EXIT_OK = 0;
+/** A check ran and found something: blockers, drift, a tampered hash. */
+export const EXIT_FINDINGS = 1;
+/** Usage or input error: unknown flag, missing argument, no such bundle. */
+export const EXIT_USAGE = 2;
+/** repropack itself failed. Not a verdict about the bundle. */
+export const EXIT_INTERNAL = 70;
 
-Capture options:
-  -o, --out <dir>          bundle output directory (default: ./repropack-bundle)
-      --scope <mode>       changed | tracked | all   (default: changed)
-  -i, --include <glob>     force-include matching files (repeatable)
-  -x, --exclude <glob>     keep matching files out (repeatable)
-      --max-file-bytes <n> skip files larger than n bytes (default: 262144)
-      --max-bundle-bytes <n> stop adding files past n bytes (default: 8388608)
-      --env <NAME>         capture this env var too (repeatable)
-      --timeout <ms>       kill the command after ms (default: 300000)
-      --no-git             do not probe the git repository
+/**
+ * Render help for one command, or for the tool as a whole.
+ *
+ * Generated from the flag table rather than typed out beside it. The two copies
+ * drifted in the direction that matters: 'verify --strict' worked for months and
+ * appeared in no help text at all, so the one flag that turns warnings into
+ * failures was undiscoverable.
+ */
+function renderHelp(command: CommandName | null): string {
+  const lines: string[] = [INTRO, ""];
+  if (command === null) {
+    lines.push("Usage:");
+    for (const name of COMMANDS) lines.push("  repropack " + SYNOPSIS[name]);
+    lines.push("  repropack --help | --version", "", "Run 'repropack <command> --help' for the options of one command.", "");
+    lines.push("Exit codes:", "  0  ok", "  1  a check found something (see the findings)", "  2  usage or input error", "  70 internal error");
+    return lines.join("\n") + "\n";
+  }
 
-Replay options:
-      --workdir <dir>      materialise here instead of a temp dir
-      --keep               keep the temp workdir after the run
-      --ignore-exit-code   only report drift, do not compare exit codes
-      --timeout <ms>       kill the replayed command after ms
+  lines.push("Usage:", "  repropack " + SYNOPSIS[command], "");
+  const rows = SPECS[command];
+  const common = new Set(SPECS[command].filter((spec) => COMMON_FLAGS.has(spec.name)).map((spec) => spec.name));
+  const own = rows.filter((spec) => !common.has(spec.name));
+  if (own.length > 0) {
+    lines.push("Options:");
+    for (const spec of own) lines.push(flagLine(spec));
+    lines.push("");
+  }
+  lines.push("Common options:");
+  for (const spec of rows.filter((spec) => common.has(spec.name))) lines.push(flagLine(spec));
+  return lines.join("\n") + "\n";
+}
 
-Pack options:
-  -o, --out <file>         archive path (default: <bundle-id>.repropack)
+const COMMON_FLAGS = new Set(["help", "version", "json", "quiet", "verbose"]);
 
-Report options:
-      --archive <name>     archive filename to reference in the report
-      --tail <n>           log lines to quote (default: 25)
-      --no-environment     omit the environment table
+function flagLine(spec: FlagSpec): string {
+  const alias = spec.aliases?.[0];
+  const head = (alias === undefined ? "    " : "-" + alias + ", ") + "--" + spec.name;
+  const withArg = spec.arg === undefined ? head : head + " " + spec.arg;
+  return "  " + withArg.padEnd(30) + " " + (spec.description ?? "");
+}
 
-Common options:
-      --json               machine-readable output on stdout
-  -q, --quiet              suppress progress on stderr
-  -v, --verbose            extra progress on stderr
-  -h, --help               show this help
-      --version            print the version
-`;
+/** Flags whose spelling is one edit away from something real; used in the error. */
+function suggestFlag(name: string, specs: readonly FlagSpec[]): string | null {
+  const candidates: string[] = [];
+  for (const spec of specs) {
+    candidates.push("--" + spec.name);
+    for (const alias of spec.aliases ?? []) candidates.push("-" + alias);
+  }
+  let best: string | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const candidate of candidates) {
+    const distance = editDistance(name, candidate);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = candidate;
+    }
+  }
+  // Two edits covers a transposition (--scop / --scope) and a doubled letter;
+  // beyond that the guess is worse than silence.
+  return bestDistance <= 2 ? best : null;
+}
 
-const COMMON: readonly FlagSpec[] = [
-  { name: "help", type: "boolean", aliases: ["h"] },
-  { name: "version", type: "boolean" },
-  { name: "json", type: "boolean" },
-  { name: "quiet", type: "boolean", aliases: ["q"] },
-  { name: "verbose", type: "boolean", aliases: ["v"] },
-];
+function editDistance(a: string, b: string): number {
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  let previous = Array.from({ length: cols }, (_unused, index) => index);
+  for (let i = 1; i < rows; i += 1) {
+    const current = [i];
+    for (let j = 1; j < cols; j += 1) {
+      const substitution = (previous[j - 1] ?? 0) + (a[i - 1] === b[j - 1] ? 0 : 1);
+      const insertion = (current[j - 1] ?? 0) + 1;
+      const deletion = (previous[j] ?? 0) + 1;
+      current.push(Math.min(substitution, insertion, deletion));
+    }
+    previous = current;
+  }
+  return previous[cols - 1] ?? 0;
+}
 
-const CAPTURE: readonly FlagSpec[] = [
-  ...COMMON,
-  { name: "out", type: "string", aliases: ["o"] },
-  { name: "scope", type: "string" },
-  { name: "include", type: "string", aliases: ["i"], repeatable: true },
-  { name: "exclude", type: "string", aliases: ["x"], repeatable: true },
-  { name: "max-file-bytes", type: "number" },
-  { name: "max-bundle-bytes", type: "number" },
-  { name: "env", type: "string", repeatable: true },
-  { name: "timeout", type: "number" },
-  { name: "no-git", type: "boolean" },
-];
-
-const REPLAY: readonly FlagSpec[] = [
-  ...COMMON,
-  { name: "workdir", type: "string" },
-  { name: "keep", type: "boolean" },
-  { name: "ignore-exit-code", type: "boolean" },
-  { name: "timeout", type: "number" },
-];
-
-const VERIFY: readonly FlagSpec[] = [...COMMON, { name: "strict", type: "boolean" }];
-
-const INSPECT: readonly FlagSpec[] = [...COMMON];
-
-const PACK: readonly FlagSpec[] = [...COMMON, { name: "out", type: "string", aliases: ["o"] }, { name: "mtime", type: "string" }];
-
-const REPORT: readonly FlagSpec[] = [
-  ...COMMON,
-  { name: "archive", type: "string" },
-  { name: "tail", type: "number" },
-  { name: "no-environment", type: "boolean" },
-];
+/**
+ * The one place unknown flags are judged.
+ *
+ * Accepting them with a warning was worse than it looked: an unrecognised flag
+ * is not consumed, so its value falls through to the positionals -- 'capture
+ * --scop all -- node x' warned and then ran the command 'all'. Failing here
+ * means a typo costs one error message instead of a confusing capture.
+ */
+function rejectUnknown(args: ParsedArgs, command: CommandName): boolean {
+  if (args.unknown.length === 0) return false;
+  for (const flag of args.unknown) {
+    const hint = suggestFlag(flag, SPECS[command]);
+    process.stderr.write("error: unknown option '" + flag + "'" + (hint === null ? "\n" : "; did you mean '" + hint + "'?\n"));
+  }
+  process.stderr.write("hint: run 'repropack " + command + " --help' for the supported options\n");
+  return true;
+}
 
 /**
  * Entry point. Returns the process exit code rather than calling
@@ -107,9 +136,15 @@ const REPORT: readonly FlagSpec[] = [
 export async function main(argv: readonly string[]): Promise<number> {
   const [command, ...rest] = argv;
 
-  if (command === undefined || command === "--help" || command === "-h" || command === "help") {
-    process.stdout.write(USAGE);
-    return 0;
+  if (command === undefined) {
+    // Printing help and succeeding looks the same as doing what was asked. A
+    // caller that forgot the argument should find out.
+    process.stderr.write("error: no command given\n\n" + renderHelp(null));
+    return EXIT_USAGE;
+  }
+  if (command === "--help" || command === "-h" || command === "help") {
+    process.stdout.write(renderHelp(null));
+    return EXIT_OK;
   }
   if (command === "--version" || command === "version") {
     // Extra arguments after `version` are ignored on purpose: scripts append
@@ -132,35 +167,37 @@ export async function main(argv: readonly string[]): Promise<number> {
     case "report":
       return runReport(rest);
     default:
-      process.stderr.write("error: unknown command '" + command + "'\n\n" + USAGE);
-      return 2;
+      process.stderr.write("error: unknown command '" + command + "'\n\n" + renderHelp(null));
+      return EXIT_USAGE;
   }
 }
 
 async function runCapture(argv: readonly string[]): Promise<number> {
   const args = parseArgs(argv, CAPTURE);
   if (flagBool(args, "help")) {
-    process.stdout.write(USAGE);
-    return 0;
+    process.stdout.write(renderHelp("capture"));
+    return EXIT_OK;
   }
   if (flagBool(args, "version")) {
     process.stdout.write(TOOL_VERSION + "\n");
-    return 0;
+    return EXIT_OK;
   }
   const log = createLogger({ quiet: flagBool(args, "quiet"), verbose: flagBool(args, "verbose") });
 
+  // Checked before the positional count so a typo is reported as a typo. The
+  // parser does not consume the value of an unknown flag, so '--scop all' left
+  // 'all' looking like the command to run.
+  if (rejectUnknown(args, "capture")) return EXIT_USAGE;
+
   if (args.positionals.length === 0) {
     process.stderr.write("error: capture needs a command after --\n");
-    return 2;
-  }
-  if (args.unknown.length > 0) {
-    log.warn("unknown option(s): " + args.unknown.join(", "));
+    return EXIT_USAGE;
   }
 
   const scope = parseScope(flagString(args, "scope"));
   if (scope === null) {
     process.stderr.write("error: --scope must be one of changed, tracked, all\n");
-    return 2;
+    return EXIT_USAGE;
   }
 
   const out = resolve(flagString(args, "out") ?? "repropack-bundle");
@@ -196,20 +233,26 @@ async function runCapture(argv: readonly string[]): Promise<number> {
 async function runReplay(argv: readonly string[]): Promise<number> {
   const args = parseArgs(argv, REPLAY);
   if (flagBool(args, "help")) {
-    process.stdout.write(USAGE);
-    return 0;
+    process.stdout.write(renderHelp("replay"));
+    return EXIT_OK;
   }
   const log = createLogger({ quiet: flagBool(args, "quiet"), verbose: flagBool(args, "verbose") });
+  if (rejectUnknown(args, "replay")) return EXIT_USAGE;
   const bundle = args.positionals[0];
   if (!bundle) {
     process.stderr.write("error: replay needs a bundle directory\n");
-    return 2;
+    return EXIT_USAGE;
   }
-  if (args.unknown.length > 0) log.warn("unknown option(s): " + args.unknown.join(", "));
+  // route the path through the shared guard: a missing directory used to reach
+  // replay() as a raw stat/ENOENT and exit 70, the code reserved for repropack
+  // itself failing.
+  const root = resolveBundlePath(bundle, "replay");
+  if (root === null) return EXIT_USAGE;
 
+  const workdir = flagString(args, "workdir");
   const result = await replay({
-    bundle: resolve(bundle),
-    workdir: flagString(args, "workdir") ? resolve(flagString(args, "workdir")!) : undefined,
+    bundle: root,
+    workdir: workdir === undefined ? undefined : resolve(workdir),
     keep: flagBool(args, "keep"),
     ignoreExitCode: flagBool(args, "ignore-exit-code"),
     timeoutMs: flagNumber(args, "timeout"),
@@ -228,26 +271,24 @@ async function runReplay(argv: readonly string[]): Promise<number> {
     }
     if (result.workdir) log.debug("workdir: " + result.workdir);
   }
-  return result.ok ? 0 : 1;
+  return result.ok ? EXIT_OK : EXIT_FINDINGS;
 }
 
 async function runVerify(argv: readonly string[]): Promise<number> {
   const args = parseArgs(argv, VERIFY);
   if (flagBool(args, "help")) {
-    process.stdout.write(USAGE);
-    return 0;
+    process.stdout.write(renderHelp("verify"));
+    return EXIT_OK;
   }
+  if (rejectUnknown(args, "verify")) return EXIT_USAGE;
   const bundle = args.positionals[0];
   if (!bundle) {
     process.stderr.write("error: verify needs a bundle directory\n");
-    return 2;
+    return EXIT_USAGE;
   }
 
-  const root = resolve(bundle);
-  if (!existsSync(root)) {
-    process.stderr.write("error: no such bundle: " + root + "\n");
-    return 2;
-  }
+  const root = resolveBundlePath(bundle, "verify");
+  if (root === null) return EXIT_USAGE;
 
   const result: VerifyResult = await verifyBundle(root, { strict: flagBool(args, "strict") });
   if (flagBool(args, "json")) {
@@ -256,7 +297,7 @@ async function runVerify(argv: readonly string[]): Promise<number> {
     process.stdout.write(formatVerify(result) + "\n");
     process.stdout.write((result.ok ? "ok" : "not ok") + " (" + result.findings.length + " finding(s))\n");
   }
-  return result.ok ? 0 : 1;
+  return result.ok ? EXIT_OK : EXIT_FINDINGS;
 }
 
 /**
@@ -280,16 +321,17 @@ function resolveBundlePath(target: string, command: string): string | null {
 async function runInspect(argv: readonly string[]): Promise<number> {
   const args = parseArgs(argv, INSPECT);
   if (flagBool(args, "help")) {
-    process.stdout.write(USAGE);
-    return 0;
+    process.stdout.write(renderHelp("inspect"));
+    return EXIT_OK;
   }
+  if (rejectUnknown(args, "inspect")) return EXIT_USAGE;
   const bundle = args.positionals[0];
   if (!bundle) {
     process.stderr.write("error: inspect needs a bundle directory\n");
-    return 2;
+    return EXIT_USAGE;
   }
   const root = resolveBundlePath(bundle, "inspect");
-  if (root === null) return 2;
+  if (root === null) return EXIT_USAGE;
   const loaded = await readBundle(root);
   if (flagBool(args, "json")) {
     process.stdout.write(JSON.stringify(loaded.manifest, null, 2) + "\n");
@@ -300,32 +342,55 @@ async function runInspect(argv: readonly string[]): Promise<number> {
       for (const problem of loaded.problems) process.stderr.write("  - " + problem + "\n");
     }
   }
-  return loaded.problems.length === 0 ? 0 : 1;
+  return loaded.problems.length === 0 ? EXIT_OK : EXIT_FINDINGS;
 }
 
 async function runPack(argv: readonly string[]): Promise<number> {
   const args = parseArgs(argv, PACK);
   if (flagBool(args, "help")) {
-    process.stdout.write(USAGE);
-    return 0;
+    process.stdout.write(renderHelp("pack"));
+    return EXIT_OK;
   }
   const log = createLogger({ quiet: flagBool(args, "quiet"), verbose: flagBool(args, "verbose") });
+  if (rejectUnknown(args, "pack")) return EXIT_USAGE;
   const target = args.positionals[0];
   if (!target) {
     process.stderr.write("error: pack needs a bundle directory\n");
-    return 2;
+    return EXIT_USAGE;
   }
-  if (args.unknown.length > 0) log.warn("unknown option(s): " + args.unknown.join(", "));
 
   const root = resolveBundlePath(target, "pack");
-  if (root === null) return 2;
+  if (root === null) return EXIT_USAGE;
   const loaded = await readBundle(root);
   if (loaded.problems.length > 0) {
     // A bundle that does not verify should not be handed to a stranger. The
     // archive is the thing people publish, so this is the last cheap stop.
     process.stderr.write("error: refusing to pack a bundle that does not verify\n");
     for (const problem of loaded.problems) process.stderr.write("  - " + problem + "\n");
-    return 1;
+    return EXIT_FINDINGS;
+  }
+
+  // The manifest agreeing with itself is not the same as the bundle being safe
+  // to publish. verify is the gate that answers the second question, and until
+  // now pack never asked it: a stray .env beside the logs verified clean (verify
+  // only reads what the manifest declares) and was compressed into the archive
+  // that gets attached to an issue.
+  const verdict = await verifyBundle(root);
+  const blockers = verdict.findings.filter((finding) => finding.severity === "blocker");
+  const allow = flagBool(args, "force");
+  if (blockers.length > 0 && !allow) {
+    process.stderr.write("error: refusing to pack a bundle that does not verify\n");
+    for (const finding of blockers) {
+      process.stderr.write("  - " + finding.code + (finding.path === undefined ? "" : " " + finding.path) + ": " + finding.message + "\n");
+    }
+    process.stderr.write("hint: run 'repropack verify " + target + "' to see every finding\n");
+    process.stderr.write("hint: pass --force to pack anyway (the archive is what people publish)\n");
+    return EXIT_FINDINGS;
+  }
+  if (allow) {
+    for (const finding of verdict.findings.filter((item) => item.severity !== "note")) {
+      log.warn(finding.code + (finding.path === undefined ? "" : " " + finding.path) + ": " + finding.message);
+    }
   }
 
   const out = resolve(flagString(args, "out") ?? loaded.manifest.id.slice(0, 12) + ARCHIVE_SUFFIX);
@@ -333,7 +398,7 @@ async function runPack(argv: readonly string[]): Promise<number> {
   const mtime = mtimeRaw === undefined ? undefined : Number(mtimeRaw);
   if (mtime !== undefined && !Number.isFinite(mtime)) {
     process.stderr.write("error: --mtime must be a number of seconds since the epoch\n");
-    return 2;
+    return EXIT_USAGE;
   }
 
   const packed = await packBundle({ root, out, mtime });
@@ -343,24 +408,25 @@ async function runPack(argv: readonly string[]): Promise<number> {
     log.info("packed " + String(packed.entries) + " file(s) into " + packed.out);
     process.stdout.write(packed.out + "\n");
   }
-  return 0;
+  return EXIT_OK;
 }
 
 async function runReport(argv: readonly string[]): Promise<number> {
   const args = parseArgs(argv, REPORT);
   if (flagBool(args, "help")) {
-    process.stdout.write(USAGE);
-    return 0;
+    process.stdout.write(renderHelp("report"));
+    return EXIT_OK;
   }
   const log = createLogger({ quiet: flagBool(args, "quiet"), verbose: flagBool(args, "verbose") });
+  if (rejectUnknown(args, "report")) return EXIT_USAGE;
   const target = args.positionals[0];
   if (!target) {
     process.stderr.write("error: report needs a bundle directory\n");
-    return 2;
+    return EXIT_USAGE;
   }
-  if (args.unknown.length > 0) log.warn("unknown option(s): " + args.unknown.join(", "));
 
-  const root = resolve(target);
+  const root = resolveBundlePath(target, "report");
+  if (root === null) return EXIT_USAGE;
   const loaded = await readBundle(root);
   const report = await buildReport({
     bundle: loaded.manifest,
@@ -377,7 +443,7 @@ async function runReport(argv: readonly string[]): Promise<number> {
     // a script can grab it with `repropack report --json | jq -r .title`.
     process.stdout.write(report.body);
   }
-  return loaded.problems.length === 0 ? 0 : 1;
+  return loaded.problems.length === 0 ? EXIT_OK : EXIT_FINDINGS;
 }
 
 function parseScope(raw: string | undefined): CaptureScope | null {

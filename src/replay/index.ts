@@ -1,19 +1,25 @@
-import { mkdtemp, mkdir, rm, stat } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readBundle, type LoadedBundle } from "../bundle/read.js";
 import { ARCHIVE_SUFFIX, unpackBundle } from "../archive/index.js";
 import { run } from "../util/exec.js";
 import { materialize } from "./materialize.js";
+import { compareStderr } from "./fidelity.js";
 import { reproducibleEnv } from "../capture/env.js";
 import type { ReplayOptions, ReplayReason, ReplayResult } from "../types.js";
 
 /**
  * Re-run a bundle in a clean directory.
  *
- * "Reproduced" means the same exit code, not the same output: timings, temp
- * paths and random ids differ on every run, so comparing stdout byte-for-byte
- * would report a false negative on almost every real bundle.
+ * "Reproduced" is judged on the failure, not on the bytes: timings, temp paths
+ * and random ids differ on every run, so a byte comparison would report a false
+ * negative on almost every real bundle. But the exit code alone is too weak in
+ * the other direction -- once capture has replaced a secret in argv with a
+ * placeholder, the replayed command can fail with a completely different error
+ * and still match on exit status. fidelity.ts compares the one line that names
+ * the failure on each side, normalised for the differences a replay is allowed
+ * to have.
  */
 export async function replay(options: ReplayOptions): Promise<ReplayResult> {
   const archives: string[] = [];
@@ -68,6 +74,7 @@ async function runReplay(
 
   const argv = loaded.manifest.command.argv;
   if (argv.length === 0) {
+    await cleanup(workdir, options);
     return {
       ok: false,
       exitCode: null,
@@ -96,6 +103,32 @@ async function runReplay(
       expected: loaded.manifest.command.exitCode,
       actual: execution.exitCode,
     });
+  } else {
+    // The exit code agreeing is the cheap half of the answer. A different error
+    // that happens to exit 1 is the expensive half, and it is the case this tool
+    // creates every time it redacts a secret out of argv: the replayed command
+    // runs with REDACTED_ where a token used to be, fails on the placeholder
+    // instead of the original value, and matches on exit status. Only judged
+    // when the codes already agree -- an exit-code drift is the larger finding,
+    // and two findings for one symptom reads as noise.
+    const recorded = await readRecordedStderr(loaded);
+    if (recorded !== null) {
+      const drift = compareStderr(recorded, execution.stderr);
+      if (drift !== null) {
+        // ReplayReason is a closed union in types.ts, which is frozen: the
+        // reproduction not being trustworthy is what "integrity" already means,
+        // so this says so through the existing kind rather than widening a
+        // contract every consumer shares.
+        reasons.push({
+          kind: "integrity",
+          detail:
+            "the replayed command failed differently: recorded " +
+            quoteHeadline(drift.expected) +
+            ", replayed " +
+            quoteHeadline(drift.actual),
+        });
+      }
+    }
   }
 
   const result: ReplayResult = {
@@ -110,11 +143,38 @@ async function runReplay(
     workdir,
   };
 
-  if (!options.keep && !options.workdir) {
-    await rm(workdir, { recursive: true, force: true });
-  }
+  await cleanup(workdir, options);
 
   return result;
+}
+
+/**
+ * Remove the temp workdir unless the caller pinned it or asked to keep it.
+ *
+ * This has to run on the early returns too: the branch that refuses a bundle
+ * with no command used to leave one directory behind per malformed bundle.
+ */
+async function cleanup(workdir: string, options: ReplayOptions): Promise<void> {
+  if (options.keep || options.workdir) return;
+  await rm(workdir, { recursive: true, force: true });
+}
+
+/**
+ * The stderr capture recorded, or null when the bundle has no log to compare.
+ *
+ * A missing log is not a drift: materialize already reports a missing file, and
+ * inventing a second finding for it would blame the manifest twice.
+ */
+async function readRecordedStderr(loaded: LoadedBundle): Promise<string | null> {
+  try {
+    return await readFile(join(loaded.root, "logs", "stderr.txt"), "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function quoteHeadline(headline: string): string {
+  return headline.length === 0 ? "no stderr output" : '"' + headline + '"';
 }
 
 export { materialize } from "./materialize.js";

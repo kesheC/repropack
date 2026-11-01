@@ -28,13 +28,23 @@ function staged(path: string, text: string, mode: "100644" | "100755" = "100644"
 }
 
 async function makeBundle(
-  options: { files: StagedFile[]; argv?: string[]; exitCode?: number | null; name?: string },
+  options: {
+    files: StagedFile[];
+    argv?: string[];
+    exitCode?: number | null;
+    name?: string;
+    /** What the captured run wrote to stderr; replay compares against it. */
+    recordedStderr?: string;
+  },
 ): Promise<string> {
   const root = join(workdir, options.name ?? "bundle");
   await writeBundle({
     root,
     files: options.files,
-    logs: [],
+    logs:
+      options.recordedStderr === undefined
+        ? []
+        : [{ path: join("logs", "stderr.txt"), content: Buffer.from(options.recordedStderr, "utf8") }],
     manifest: {
       formatVersion: 1,
       createdAt: "2026-01-01T00:00:00.000Z",
@@ -171,6 +181,84 @@ describe("replay", () => {
     const result = await replay({ bundle });
     expect(result.ok).toBe(false);
     expect(result.reasons.length).toBeGreaterThan(0);
+  });
+
+  it("says the failure drifted when the error message differs", async () => {
+    // The trap this tool creates for itself: capture redacts a token out of argv,
+    // so the replayed command fails on the placeholder instead of the token. Same
+    // exit code, different bug -- and the old code called that faithful.
+    const bundle = await makeBundle({
+      files: [
+        staged(
+          "fail.js",
+          "const token = process.argv[2] ?? '';\n" +
+            "if (token.startsWith('REDACTED_')) {\n" +
+            "  console.error('auth failed: token ' + token + ' is a placeholder');\n" +
+            "} else {\n" +
+            "  console.error('auth failed: token ' + token.slice(0, 3) + '*** has length ' + token.length);\n" +
+            "}\n" +
+            "process.exit(1);\n",
+        ),
+      ],
+      argv: [node, "fail.js", "REDACTED_OPENAI_KEY"],
+      exitCode: 1,
+      recordedStderr: "auth failed: token sk-*** has length 40\n",
+    });
+
+    const result = await replay({ bundle });
+
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(1);
+    const drift = result.reasons.find((reason) => reason.kind === "integrity");
+    expect(drift).toBeTruthy();
+    if (drift?.kind !== "integrity") throw new Error("expected an integrity reason");
+    expect(drift.detail).toContain("failed differently");
+    expect(drift.detail).toContain("has length 40");
+    expect(drift.detail).toContain("is a placeholder");
+  });
+
+  it("still calls a replay faithful when only the paths and timings moved", async () => {
+    // The other half of the same judgement: a temp directory that differs between
+    // machines is not a reproduction failure, and reporting it would train people
+    // to ignore the one finding that does matter.
+    const bundle = await makeBundle({
+      files: [
+        staged(
+          "fail.js",
+          "console.error('Error: boom at ' + process.cwd() + ' after 12ms');\nprocess.exit(1);\n",
+        ),
+      ],
+      exitCode: 1,
+      recordedStderr: "Error: boom at C:\\Users\\alice\\work after 7ms\n    at fail.js:1:1\n",
+    });
+
+    const result = await replay({ bundle });
+
+    expect(result.ok).toBe(true);
+    expect(result.reasons).toEqual([]);
+  });
+
+  it("reports a drift when the recorded run printed nothing at all", async () => {
+    const bundle = await makeBundle({
+      files: [staged("fail.js", "console.error('Error: boom');\nprocess.exit(1);\n")],
+      exitCode: 1,
+      recordedStderr: "",
+    });
+
+    const result = await replay({ bundle });
+
+    expect(result.ok).toBe(false);
+    const drift = result.reasons.find((reason) => reason.kind === "integrity");
+    expect(drift).toBeTruthy();
+    if (drift?.kind !== "integrity") throw new Error("expected an integrity reason");
+    expect(drift.detail).toContain("no stderr output");
+  });
+
+  it("leaves no workdir behind when the bundle records no command", async () => {
+    // That branch returns before the run, and used to skip the cleanup with it.
+    const bundle = await makeBundle({ files: [], argv: [], exitCode: null });
+    const result = await replay({ bundle });
+    await expect(stat(result.workdir)).rejects.toThrow();
   });
 
   it("cleans up the temp workdir unless asked to keep it", async () => {

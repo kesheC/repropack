@@ -19,6 +19,10 @@ export interface FlagSpec {
   readonly aliases?: readonly string[];
   /** Setting the flag more than once accumulates into an array. */
   readonly repeatable?: boolean;
+  /** Value placeholder shown in help, e.g. "<dir>". Absent for booleans. */
+  readonly arg?: string;
+  /** One sentence, shown in help. Help is generated from the spec, not typed twice. */
+  readonly description?: string;
 }
 
 export function parseArgs(argv: readonly string[], specs: readonly FlagSpec[]): ParsedArgs {
