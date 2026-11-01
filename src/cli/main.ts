@@ -118,6 +118,59 @@ function editDistance(a: string, b: string): number {
 }
 
 /**
+ * Judge what every command shares before the command runs: unknown options
+ * first, then the two flags that are not per-command requests.
+ *
+ * The order is the whole point. Each run* function used to answer `--help`
+ * before looking at the rest of the line, so `capture --bogus --help` printed
+ * the help and exited 0: the typo was invisible and a script that mistyped an
+ * option read that as success. A help request is not a licence to ignore the
+ * other tokens.
+ *
+ * `--version` sits in the shared table because `repropack --version` needs it,
+ * but no subcommand acts on it, and only some of them answered it: `capture
+ * --version` printed the version, while `inspect --version` treated it as a
+ * bundle directory and complained about the missing path. It is a top-level
+ * request.
+ */
+function sharedOptionError(args: ParsedArgs, command: CommandName): number | null {
+  if (rejectUnknown(args, command)) return EXIT_USAGE;
+  if (flagBool(args, "version")) {
+    process.stderr.write("error: --version is not supported by '" + command + "'; it applies to 'repropack --version' on its own\n");
+    return EXIT_USAGE;
+  }
+  if (flagBool(args, "help")) {
+    process.stdout.write(renderHelp(command));
+    return EXIT_OK;
+  }
+  return null;
+}
+
+/**
+ * Every flag any command knows, for a guess at the top level.
+ *
+ * COMMON is spread by reference into each command table, so the Set collapses
+ * the copies and keeps the spec objects that carry the descriptions.
+ */
+const ALL_FLAGS: readonly FlagSpec[] = [...new Set(COMMANDS.flatMap((name) => SPECS[name]))];
+
+/** The tokens after `--help` or `--version`, which take none. */
+function rejectStrayAfter(verb: string, rest: readonly string[]): number | null {
+  const stray = rest[0];
+  if (stray === undefined) return null;
+  if (stray.startsWith("-")) {
+    // 'repropack --help --bogus' used to print the help and exit 0, which is
+    // indistinguishable from a clean run to anything wrapping the command.
+    const hint = suggestFlag(stray, ALL_FLAGS);
+    process.stderr.write("error: unknown option '" + stray + "'" + (hint === null ? "\n" : "; did you mean '" + hint + "'?\n"));
+  } else {
+    process.stderr.write("error: unexpected argument '" + stray + "' after " + verb + "\n");
+  }
+  process.stderr.write("hint: run 'repropack --help' for the usage\n");
+  return EXIT_USAGE;
+}
+
+/**
  * The one place unknown flags are judged.
  *
  * Accepting them with a warning was worse than it looked: an unrecognised flag
@@ -153,12 +206,16 @@ export async function main(argv: readonly string[]): Promise<number> {
     return EXIT_USAGE;
   }
   if (command === "--help" || command === "-h" || command === "help") {
+    const refused = rejectStrayAfter("--help", rest);
+    if (refused !== null) return refused;
     process.stdout.write(renderHelp(null));
     return EXIT_OK;
   }
   if (command === "--version" || command === "version") {
-    // Extra arguments after `version` are ignored on purpose: scripts append
-    // flags liberally and a version probe should never fail on them.
+    // Nothing may follow. '--version --bogus' used to print the version and
+    // exit 0, so an unrecognised word was answered as if it had been read.
+    const refused = rejectStrayAfter("--version", rest);
+    if (refused !== null) return refused;
     process.stdout.write(TOOL_VERSION + "\n");
     return 0;
   }
@@ -177,6 +234,15 @@ export async function main(argv: readonly string[]): Promise<number> {
     case "report":
       return runReport(rest);
     default:
+      // '--bogus' is a mistyped option, not a mistyped command: calling it an
+      // unknown command sent the reader looking for a subcommand they never
+      // meant to type.
+      if (command.startsWith("-")) {
+        const hint = suggestFlag(command, ALL_FLAGS);
+        process.stderr.write("error: unknown option '" + command + "'" + (hint === null ? "\n" : "; did you mean '" + hint + "'?\n"));
+        process.stderr.write("hint: run 'repropack --help' for the usage\n");
+        return EXIT_USAGE;
+      }
       process.stderr.write("error: unknown command '" + command + "'\n\n" + renderHelp(null));
       return EXIT_USAGE;
   }
@@ -184,20 +250,9 @@ export async function main(argv: readonly string[]): Promise<number> {
 
 async function runCapture(argv: readonly string[]): Promise<number> {
   const args = parseArgs(argv, CAPTURE);
-  if (flagBool(args, "help")) {
-    process.stdout.write(renderHelp("capture"));
-    return EXIT_OK;
-  }
-  if (flagBool(args, "version")) {
-    process.stdout.write(TOOL_VERSION + "\n");
-    return EXIT_OK;
-  }
+  const refused = sharedOptionError(args, "capture");
+  if (refused !== null) return refused;
   const log = createLogger({ quiet: flagBool(args, "quiet"), verbose: flagBool(args, "verbose") });
-
-  // Checked before the positional count so a typo is reported as a typo. The
-  // parser does not consume the value of an unknown flag, so '--scop all' left
-  // 'all' looking like the command to run.
-  if (rejectUnknown(args, "capture")) return EXIT_USAGE;
 
   if (args.positionals.length === 0) {
     process.stderr.write("error: capture needs a command after --\n");
@@ -242,12 +297,10 @@ async function runCapture(argv: readonly string[]): Promise<number> {
 
 async function runReplay(argv: readonly string[]): Promise<number> {
   const args = parseArgs(argv, REPLAY);
-  if (flagBool(args, "help")) {
-    process.stdout.write(renderHelp("replay"));
-    return EXIT_OK;
-  }
+  const refused = sharedOptionError(args, "replay");
+  if (refused !== null) return refused;
   const log = createLogger({ quiet: flagBool(args, "quiet"), verbose: flagBool(args, "verbose") });
-  if (rejectUnknown(args, "replay")) return EXIT_USAGE;
+
   const bundle = args.positionals[0];
   if (!bundle) {
     process.stderr.write("error: replay needs a bundle directory\n");
@@ -286,11 +339,9 @@ async function runReplay(argv: readonly string[]): Promise<number> {
 
 async function runVerify(argv: readonly string[]): Promise<number> {
   const args = parseArgs(argv, VERIFY);
-  if (flagBool(args, "help")) {
-    process.stdout.write(renderHelp("verify"));
-    return EXIT_OK;
-  }
-  if (rejectUnknown(args, "verify")) return EXIT_USAGE;
+  const refused = sharedOptionError(args, "verify");
+  if (refused !== null) return refused;
+
   const bundle = args.positionals[0];
   if (!bundle) {
     process.stderr.write("error: verify needs a bundle directory\n");
@@ -330,11 +381,9 @@ function resolveBundlePath(target: string, command: string): string | null {
 
 async function runInspect(argv: readonly string[]): Promise<number> {
   const args = parseArgs(argv, INSPECT);
-  if (flagBool(args, "help")) {
-    process.stdout.write(renderHelp("inspect"));
-    return EXIT_OK;
-  }
-  if (rejectUnknown(args, "inspect")) return EXIT_USAGE;
+  const refused = sharedOptionError(args, "inspect");
+  if (refused !== null) return refused;
+
   const bundle = args.positionals[0];
   if (!bundle) {
     process.stderr.write("error: inspect needs a bundle directory\n");
@@ -357,12 +406,10 @@ async function runInspect(argv: readonly string[]): Promise<number> {
 
 async function runPack(argv: readonly string[]): Promise<number> {
   const args = parseArgs(argv, PACK);
-  if (flagBool(args, "help")) {
-    process.stdout.write(renderHelp("pack"));
-    return EXIT_OK;
-  }
+  const refused = sharedOptionError(args, "pack");
+  if (refused !== null) return refused;
   const log = createLogger({ quiet: flagBool(args, "quiet"), verbose: flagBool(args, "verbose") });
-  if (rejectUnknown(args, "pack")) return EXIT_USAGE;
+
   const target = args.positionals[0];
   if (!target) {
     process.stderr.write("error: pack needs a bundle directory\n");
@@ -423,12 +470,10 @@ async function runPack(argv: readonly string[]): Promise<number> {
 
 async function runReport(argv: readonly string[]): Promise<number> {
   const args = parseArgs(argv, REPORT);
-  if (flagBool(args, "help")) {
-    process.stdout.write(renderHelp("report"));
-    return EXIT_OK;
-  }
+  const refused = sharedOptionError(args, "report");
+  if (refused !== null) return refused;
   const log = createLogger({ quiet: flagBool(args, "quiet"), verbose: flagBool(args, "verbose") });
-  if (rejectUnknown(args, "report")) return EXIT_USAGE;
+
   const target = args.positionals[0];
   if (!target) {
     process.stderr.write("error: report needs a bundle directory\n");

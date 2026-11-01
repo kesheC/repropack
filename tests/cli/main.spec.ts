@@ -402,6 +402,55 @@ describe("main: capture end to end", () => {
     expect(io.stderr()).not.toContain("did you mean");
   });
 
+  it("refuses a value after a flag that takes none", async () => {
+    // "capture --bogus --help" was answered with the help text and exit 0:
+    // the typo was invisible and a caller that mistyped an option recorded a
+    // success. The shared table means the refusal is worded the same way
+    // wherever on the line the mistake sits.
+    const io = captureIo();
+    expect(await main(["capture", "--bogus", "--help"])).toBe(2);
+    expect(io.stdout()).toBe("");
+    expect(io.stderr()).toContain("unknown option '--bogus'");
+    expect(io.stderr()).not.toContain("Usage:");
+  });
+
+  it("answers --version only at the top level", async () => {
+    // Only some subcommands used to answer it: "capture --version" printed the
+    // version, while "inspect --version" read it as a bundle directory and
+    // complained about the missing path. The message now says where it does
+    // work, the way the per-command option errors do.
+    for (const command of ["capture", "replay", "verify", "inspect", "pack", "report"]) {
+      const io = captureIo();
+      expect(await main([command, "--version"])).toBe(2);
+      expect(io.stdout()).toBe("");
+      expect(io.stderr()).toContain("--version is not supported by '" + command + "'");
+      expect(io.stderr()).toContain("'repropack --version'");
+    }
+  });
+
+  it("still prints the help when nothing is wrong on the line", async () => {
+    const io = captureIo();
+    expect(await main(["capture", "--help"])).toBe(0);
+    expect(io.stdout()).toContain("repropack capture");
+    expect(io.stderr()).toBe("");
+  });
+
+  it("names a mistyped option at the top level instead of a missing command", async () => {
+    // "--bogus" is not a command. Calling it one sent the reader looking for a
+    // subcommand they never meant to type, and dropped the one useful hint.
+    const io = captureIo();
+    expect(await main(["--bogus"])).toBe(2);
+    expect(io.stderr()).toContain("unknown option '--bogus'");
+    expect(io.stderr()).not.toContain("unknown command");
+    expect(io.stdout()).toBe("");
+  });
+
+  it("does not let a flag hide behind --version either", async () => {
+    const io = captureIo();
+    expect(await main(["--version", "--bogus"])).toBe(2);
+    expect(io.stdout()).toBe("");
+    expect(io.stderr()).toContain("unknown option '--bogus'");
+  });
   it("never suggests the flag the user already wrote", async () => {
     // "--nope" is two edits from "--scope", so the suggestion itself is fine;
     // what must never happen is a suggestion equal to the input.

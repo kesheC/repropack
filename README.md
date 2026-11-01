@@ -226,6 +226,40 @@ hint: run 'repropack capture --help' for the supported options
 
 拿不准时就传 `--scope all`，让 `--max-bundle-bytes` 去拦超量；`verify` 会告诉你 bundle 是不是太薄。
 
+`--help` and `--version` do not swallow the rest of the line. A mistyped
+flag is reported before the usage page is printed, and `--version` answers only
+at the top level:
+
+```text
+$ repropack capture --bogus --help
+error: unknown option '--bogus'
+hint: run 'repropack capture --help' for the supported options
+$ repropack inspect --version
+error: --version is not supported by 'inspect'; it applies to 'repropack --version' on its own
+```
+
+```text
+$ repropack --bogus
+error: unknown option '--bogus'
+hint: run 'repropack --help' for the usage
+```
+
+`--help` 和 `--version` 不会吞掉后面剩下的东西。拼错的 flag 先报错再谈打印用法页，`--version` 只在顶层回答：
+
+```text
+$ repropack capture --bogus --help
+error: unknown option '--bogus'
+hint: run 'repropack capture --help' for the supported options
+$ repropack inspect --version
+error: --version is not supported by 'inspect'; it applies to 'repropack --version' on its own
+```
+
+```text
+$ repropack --bogus
+error: unknown option '--bogus'
+hint: run 'repropack --help' for the usage
+```
+
 ## What's in a bundle / 产物结构
 
 ```

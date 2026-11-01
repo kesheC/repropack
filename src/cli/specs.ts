@@ -16,7 +16,7 @@ export type CommandName = (typeof COMMANDS)[number];
 
 const COMMON: readonly FlagSpec[] = [
   { name: "help", type: "boolean", aliases: ["h"], description: "show this help" },
-  { name: "version", type: "boolean", description: "print the version" },
+  { name: "version", type: "boolean", description: "print the version (top level only)" },
   { name: "json", type: "boolean", description: "machine-readable output on stdout" },
   { name: "quiet", type: "boolean", aliases: ["q"], description: "suppress progress on stderr" },
   { name: "verbose", type: "boolean", aliases: ["v"], description: "extra progress on stderr" },

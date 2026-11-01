@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A mistyped flag is reported even when `--help` is on the same line.** Every
+  command answered `--help` before it looked at the rest of the line, so
+  `repropack capture --bogus --help` printed the usage page and exited 0 -- an
+  unrecognised option answered as if it had been read. The option table is now
+  checked first; `capture --bogus --help` exits 2 with `error: unknown option
+  '--bogus'` and the usual `hint:` line.
+- **`--version` is a top-level request.** `repropack capture --version` printed
+  the version and exited 0 without capturing anything. After a command it is now
+  a usage error that says where the answer lives: `error: --version is not
+  supported by 'capture'; it applies to 'repropack --version' on its own`.
+- **Words after `--help` or `--version` are no longer ignored.** `repropack
+  --version --bogus` printed the version and exited 0, and `help extra` was
+  read as a request for help. Both exit 2 now, naming the stray word.
+- **A dash-shaped first word is reported as an option, not as a command.**
+  `repropack --bogus` answered `error: unknown command '--bogus'` plus the whole
+  usage page, which sends the reader looking for a subcommand. It now says
+  `error: unknown option '--bogus'` and keeps the `did you mean` hint.
+
 ## [0.1.10] - 2026-11-01
 
 ### Fixed
