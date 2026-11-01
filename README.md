@@ -64,9 +64,11 @@ Error: share for gadgets is not a finite number: NaN
 exit=1
 ```
 
-Capture it:
+Capture it — every transcript below starts from the repository root, so `demo/`
+is entered again:
 
 ```console
+$ cd demo
 $ repropack capture --no-git --scope all --out ./bundle -- node src/main.js
 running node src/main.js
 bundle written to …/demo/bundle
@@ -86,9 +88,11 @@ pack it into the one file you would actually attach, and replay that file
 anywhere — a different directory, a different machine, a different OS:
 
 ```console
-$ repropack pack ./bundle --out demo.repropack
+$ cd demo && repropack pack ./bundle --out demo.repropack
 packed 10 file(s) into …/demo/demo.repropack
-$ cd /tmp && repropack replay /home/you/repropack/demo/demo.repropack; echo "exit=$?"
+…/demo/demo.repropack
+$ mkdir -p /tmp/elsewhere && cp demo.repropack /tmp/elsewhere/ && cd /tmp/elsewhere
+$ repropack replay demo.repropack; echo "exit=$?"
 widgets -> 25.0%
 file:///…/repropack-replay-Z2646b/src/main.js:13
     throw new Error("share for " + row.category + " is not a finite number: " + share);
@@ -125,7 +129,7 @@ Node releases. Everything else is verbatim.
 
 第二个块是一次真实抓取：命令被运行，bundle 写到 `./bundle`，随后是清单摘要——bundle id、创建时间、命令、退出码、耗时、Node 版本、仓库信息、4 个文件共 1.3 KB、2 条命中分布在 2 条规则上。这里用 `--no-git` 让输出与机器上的 git 状态无关；在你自己的仓库里去掉它，`repo` 一行就会显示当前提交。
 
-第三个块把 bundle 打成单个 `demo.repropack`，换到 `/tmp` 里用**绝对路径**重放，得到同样的 `NaN` 和「replayed faithfully (exit 1)」。这条绝对路径不是啰嗦：`./demo.repropack` 是相对于你当前所在目录解析的，而这一段的重点恰恰是「换到别的目录」。归档里带着失败触及的那四个文件——对面不需要 clone，也不需要装任何东西。
+第三个块把 bundle 打成单个 `demo.repropack`（`pack` 打两行：`packed 10 file(s) into …` 是人读的进度，单独一行路径是给脚本的，所以它出现在 stdout 上），再把这个文件拷到 `/tmp/elsewhere` 里重放，得到同样的 `NaN` 和「replayed faithfully (exit 1)」。这里刻意用的是**相对路径** `demo.repropack`：文件已经拷到了当前目录，其余一切仍由归档自己带过来——对面不需要 clone，也不需要装任何东西。
 
 那份转录里有两处不是笔误，值得说清楚：
 
@@ -355,10 +359,12 @@ bundle/
 
 `bundle.json` carries a SHA-256 over a canonical serialisation, and every file
 carries its own hash. Change one captured file after the fact and `verify` names
-it:
+it. The transcript below works on a copy, so the clean bundle this page captured
+stays clean for everything after it:
 
 ```console
-$ repropack verify ./bundle; echo "exit=$?"
+$ rm -rf /tmp/tampered && cp -r demo/bundle /tmp/tampered && echo '// edited after the capture' >> /tmp/tampered/files/src/calculator.js
+$ repropack verify /tmp/tampered; echo "exit=$?"
   blocker integrity-mismatch        files/src/calculator.js: content hash does not match its manifest entry; the payload changed after capture, so replay would rebuild something that never ran
 not ok (1 finding(s))
 exit=1
@@ -375,7 +381,7 @@ nothing here needs repropack installed to inspect.
 
 bundle 目录的固定结构：`bundle.json` 是清单，记录命令、argv、退出码、环境与文件哈希；`files/` 是失败触及的源码树，已脱敏；`logs/` 下是捕获的输出，`stdout.txt` 与 `stderr.txt` 都已脱敏，过长时保留尾部；`Dockerfile` 由记录下来的环境推导；`replay.sh` 是 POSIX 入口，从 `files/` 里运行；`replay.cmd` 是对应的 Windows 版本。
 
-`bundle.json` 里带有对规范序列化结果的 SHA-256，每个文件也各自带哈希。抓完之后改动任何一个被捕获的文件，`verify` 会点名它：`blocker integrity-mismatch`、指出是 `files/src/calculator.js` 的内容哈希与清单不符，然后 `not ok (1 finding(s))` 并以 1 退出。
+`bundle.json` 里带有对规范序列化结果的 SHA-256，每个文件也各自带哈希。抓完之后改动任何一个被捕获的文件，`verify` 会点名它。上面的转录是先 `cp -r` 出一份副本再动刀子，所以这一页自己抓的那个干净 bundle 在后面几段里仍然是干净的。
 
 replay 从另一侧给出同样的判决：载荷一旦与清单不符，这次运行就不再忠实，`replay` 会以非零退出，而不是打印记录下来的那个退出码——此时 stdout 是空的。
 
@@ -398,18 +404,19 @@ in the title and in the table.
 before you attach anything to a public issue:
 
 ```console
-$ repropack verify ./bundle
+$ repropack verify demo/bundle
 no findings
 ok (0 finding(s))
 ```
 
 It exits non-zero on blockers, so it works as a pre-publish gate in a script.
 Drop a file the scanners still recognise — here one holding a GitHub-shaped token
-at `files/leak.js` — into an otherwise clean bundle and the same command says so
-instead:
+at `files/leak.js` — into a copy of an otherwise clean bundle and the same
+command says so instead:
 
 ```console
-$ repropack verify ./bundle; echo "exit=$?"
+$ rm -rf /tmp/leaky && cp -r demo/bundle /tmp/leaky && printf 'const leaked = ghp_000000000000000000000000000000000000;\n' > /tmp/leaky/files/leak.js
+$ repropack verify /tmp/leaky; echo "exit=$?"
   blocker leak-suspected            files/leak.js: redaction rule "github-token" still matches 1 time; this surface must not be published as it stands
 not ok (1 finding(s))
 exit=1
@@ -426,7 +433,7 @@ path, say — is reported but does not fail the run.
 
 `repropack verify` 会重新扫描一个已完成的 bundle，报告有什么残留下来。把任何东西贴到公开 issue 之前先跑它，输出应为 `no findings` 与 `ok (0 finding(s))`。它在存在阻断项时以非零退出，因此可以在脚本里当作发布前门禁。
 
-往一个本来干净的 bundle 里塞一个扫描器仍能识别的文件，同一条命令就会立刻改口：报出 `blocker leak-suspected`、说明是哪条规则、还是命中几次，然后 `not ok (1 finding(s))` 并以 1 退出。
+往一个本来干净的 bundle 的副本里塞一个扫描器仍能识别的文件，同一条命令就会立刻改口：报出 `blocker leak-suspected`、说明是哪条规则、还是命中几次，然后 `not ok (1 finding(s))` 并以 1 退出。两个转录都用 `cp -r` 复制出来的目录，所以顺序执行时互不干扰，也不会把这一页刚抓的 bundle 弄脏。
 
 `blocker` 是 bundle 在说「这个不能发」。相对地，`note`（比如某条绝对路径）会被报告但不让命令失败——两者语气不同，脚本里只该拦前者。
 
