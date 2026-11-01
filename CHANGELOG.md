@@ -23,11 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--version` to a literal, so every release turned two unrelated cases red.
   It now compares against `TOOL_VERSION`, which `tests/version.spec.ts` already
   ties to `package.json` -- drift still fails CI, a bump does not.
-- **Rewriting the tests lost three guards; all three are back.** The release is
-  re-published with `gh release edit --draft=false` before any upload (GitHub
-  demotes a release to a draft when its tag is deleted and pushed again), the
-  `repropack` bin is smoke tested from the installed package, and `npm run build`
-  still clears `dist/` before compiling.
+- **Two guards the old test did not have.** The `repropack` bin is smoke tested
+  from the installed package, and `npm run build` now starts by clearing `dist/`
+  -- `clean` did not exist at v0.1.7, so any file tsc no longer emits survived in
+  `dist/` from an earlier build and `npm pack` shipped it.
+
 ## [0.1.7] - 2026-11-01
 
 ### Added
@@ -66,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `pack` is a new exit for a bundle that carries a blocker, so the last cheap
   gate before a bundle leaves the machine is now enforced by the tool.
+
 ## [0.1.6] - 2026-11-01
 
 ### Changed
@@ -166,7 +167,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI matrix: Ubuntu and Windows, Node 20 and 22.
 - Zero runtime dependencies.
 
-[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/kesheC/repropack/compare/v0.1.7...v0.1.8
+[0.1.7]: https://github.com/kesheC/repropack/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/kesheC/repropack/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/kesheC/repropack/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/kesheC/repropack/compare/v0.1.3...v0.1.4
