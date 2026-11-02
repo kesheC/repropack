@@ -397,3 +397,30 @@ describe("the contributor-facing gate list", () => {
     }
   });
 });
+
+describe("the actions the workflows run", () => {
+  // A tag on a third-party action is a mutable pointer: `actions/checkout@v5`
+  // means whatever that repository's maintainers pushed to the v5 tag today.
+  // These workflows run with the repository's own token, so a moved pointer is
+  // a supply-chain entry point that no test would ever notice -- CI would just
+  // start running different code and stay green.
+  //
+  // Pin the commit, keep the readable version beside it. Dependabot bumps both
+  // halves together, so the comment cannot drift away from the sha.
+  const workflows = ["ci.yml", "release.yml"];
+
+  it("pins every action to a commit sha", () => {
+    for (const name of workflows) {
+      const lines = readWorkflow(name).split(/\r?\n/);
+      const uses = lines.filter((line) => line.includes("uses:"));
+      expect(uses.length, name + " runs no actions at all").toBeGreaterThan(0);
+      for (const line of uses) {
+        const ref = line.slice(line.indexOf("uses:") + "uses:".length).trim().split(/\s+/)[0] ?? "";
+        // Both halves matter. A 40-character sha alone is unreadable six months
+        // later; a tag alone is the mutable pointer this test exists to stop.
+        expect(ref, name + ": " + ref + " is not pinned to a commit sha").toMatch(/@[0-9a-f]{40}$/);
+        expect(line, name + ": " + ref + " has no version comment").toMatch(/# v\d+\.\d+\.\d+\s*$/);
+      }
+    }
+  });
+});

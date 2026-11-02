@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The workflows pinned third-party actions by tag, which is a mutable pointer.**
+  `actions/checkout@v5` means whatever the action's maintainers push to that tag, so a
+  moved tag silently swaps the code this repository's own token runs — and CI would stay
+  green throughout. Both actions are now pinned to a commit sha with the readable version
+  kept beside them (`# v5.1.0`, `# v5.0.0`), and `tests/workflow.test.ts` fails when a
+  `uses:` line carries a tag instead of a 40-character sha, or a sha without its comment.
+  Dependabot bumps the two halves together, so the comment cannot drift away from the sha.
+
+### Added
+
+- `.github/dependabot.yml` covers the two ecosystems this repository actually installs:
+  the workflow actions and the dev toolchain in `package-lock.json`. Weekly, grouped, so a
+  bump arrives as one pull request with a green run behind it rather than a queue of them.
+  Dependabot alerts and automated security fixes were already on; without a version-update
+  config, a pinned sha would only ever move when someone remembered to move it.
+
 ## [0.1.20] - 2026-11-02
 
 ### Fixed
