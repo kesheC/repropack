@@ -62,7 +62,7 @@ body:
     attributes:
       label: repropack version
       description: The output of `repropack --version`.
-      placeholder: 0.1.1
+      placeholder: 0.1.13
     validations:
       required: true
 
@@ -88,7 +88,7 @@ body:
     attributes:
       label: How you installed it
       description: Release tarball, built from a checkout, or something else.
-      placeholder: npm install -g https://github.com/kesheC/repropack/releases/download/v0.1.1/repropack-0.1.1.tgz
+      placeholder: npm install -g https://github.com/kesheC/repropack/releases/latest/download/repropack.tgz
     validations:
       required: true
 
