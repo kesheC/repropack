@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-11-02
+
 ### Changed
 
 - **The quickstart's capture transcript now clears its own output first.** Running the
@@ -15,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of rebuilding it, and the transcript drifted from `files 4 (1.3 KB)` to
   `files 5 (4.2 KB)` and from `packed 10 file(s)` to `packed 11`. The block now begins
   with `rm -rf ./bundle demo.repropack`, so the quoted numbers reproduce read after read.
+
+### Quality
+
+- 382 tests across 28 spec files, 4997 lines of TypeScript.
+- CI matrix: Ubuntu and Windows, Node 20, 22 and 24.
+- Zero runtime dependencies.
 
 ## [0.1.17] - 2026-11-02
 
@@ -402,7 +410,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.1.14]: https://github.com/kesheC/repropack/compare/v0.1.13...v0.1.14
 [0.1.15]: https://github.com/kesheC/repropack/compare/v0.1.14...v0.1.15
 [0.1.17]: https://github.com/kesheC/repropack/compare/v0.1.15...v0.1.17
-[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.17...HEAD
+[0.1.18]: https://github.com/kesheC/repropack/compare/v0.1.17...v0.1.18
+[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.18...HEAD
 [0.1.10]: https://github.com/kesheC/repropack/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/kesheC/repropack/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kesheC/repropack/compare/v0.1.7...v0.1.8
