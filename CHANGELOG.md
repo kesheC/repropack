@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **CONTRIBUTING.md promised "the same three commands CI runs" and listed three, while CI ran
+  four.** The sentence is a claim about the workflow, and it went stale the moment the audit
+  step landed: a contributor following the list would have skipped the one check that reads
+  the whole supply chain. The heading is now "the commands CI runs" without a count, the list
+  includes `npm audit --audit-level=high`, and `tests/workflow.test.ts` walks all four names
+  through both files so a step added to one without the other fails the suite instead of the
+  reader.
 - **`package-lock.json` was marked `-diff`, so its diff was never readable.** The attribute
   reads like "also treat this as text" and means the opposite: `diff` set to *unset*, do not
   diff this file. Every dependency change therefore rendered as `Binary files differ` with zero

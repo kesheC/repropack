@@ -36,15 +36,21 @@ whatever release you installed earlier and is usually stale.
 
 ## The quality gates
 
-Every change has to pass the same three commands CI runs:
+Every change has to pass the commands CI runs:
 
 ```bash
 npm run typecheck   # tsc --noEmit, tests included
 npm run build       # tsc -p tsconfig.build.json
 npm test            # vitest run
+npm audit --audit-level=high   # the toolchain is the entire supply chain
 ```
 
 Opening the pull request runs them on Ubuntu and Windows across Node 20, 22 and 24.
+
+The audit is part of the gate because this package ships no runtime dependencies: what you
+install to work on it *is* the whole supply chain. It fails on high and critical advisories
+only; a moderate finding is worth reading when you next touch the dependencies, but it is not
+worth blocking an unrelated fix.
 
 Part of the README is already under test: `tests/package.test.ts` asserts the Redaction section
 quotes `REDACTION_RULES.length`. The transcripts are not re-run by CI — the smoke step only

@@ -381,3 +381,19 @@ describe("CI workflow: every command package.json declares is smoke tested", () 
     }
   });
 });
+
+describe("the contributor-facing gate list", () => {
+  // CONTRIBUTING.md opens its gate section with "the commands CI runs" and then
+  // lists them. That sentence is a claim about the workflow, so it drifts the
+  // moment a step is added to one and not the other -- which is what happened
+  // when the audit step landed and the list still said "the same three commands".
+  it("names the same commands the workflow runs", () => {
+    const contrib = readFileSync(path.join(repoRoot, "CONTRIBUTING.md"), "utf8");
+    const ci = readWorkflow("ci.yml");
+    const commands = ["npm run typecheck", "npm run build", "npm test", "npm audit --audit-level=high"];
+    for (const command of commands) {
+      expect(ci).toContain("run: " + command);
+      expect(contrib).toContain(command);
+    }
+  });
+});
