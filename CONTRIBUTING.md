@@ -39,9 +39,14 @@ npm run build       # tsc -p tsconfig.build.json
 npm test            # vitest run
 ```
 
-Opening the pull request runs them on Ubuntu and Windows across Node 20, 22 and 24. The README
-transcripts are not re-run by CI, so they were checked by hand against a real run on this machine;
-if you touch one, run the command and paste exactly what it printed.
+Opening the pull request runs them on Ubuntu and Windows across Node 20, 22 and 24.
+
+Part of the README is already under test: `tests/package.test.ts` asserts the Redaction section
+quotes `REDACTION_RULES.length`. The transcripts are not re-run by CI — the smoke step only
+verifies the packed artifact — so they were checked by hand against a real run on this machine.
+If you touch one, run the command and paste exactly what it printed. The demo bundle is captured
+fresh each time, so a transcript that depends on `/tmp` paths or on the repository's git state
+will not reproduce on someone else's checkout: prefer `--no-git` and relative paths.
 
 ## House rules
 

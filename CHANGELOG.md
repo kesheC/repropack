@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   program while every gate stayed green. `tests/package.test.ts` now reads
   `REDACTION_RULES.length` and asserts both sentences quote it, which turns the next drift into
   a failure that names the README number and the shipped number side by side.
+- **The contributing guide described gates that no longer match the repository.** It said the
+  README transcripts are re-run by CI and that the smoke step checks them; the smoke step only
+  verifies the packed artifact, so the guide now says so, points at the one test that does guard a
+  documented number, and adds the two rules that make a transcript reproducible (capture with
+  `--no-git`, quote relative paths).
 
 ## [0.1.14] - 2026-11-02
 
