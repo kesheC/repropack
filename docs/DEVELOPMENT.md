@@ -17,8 +17,9 @@ repropack, not for users — see `README.md` for that.
    split or piping `repropack inspect --json` into `jq` breaks.
 5. **Node >= 20.11** is the floor, and `package.json`, this file and the CI
    matrix all say so. 20.11 is where `import.meta.dirname` and the modern
-   `node:fs/promises` behaviour we rely on are stable; the CI matrix runs 20 and
-   22, so anything newer is not allowed either.
+   `node:fs/promises` behaviour we rely on are stable. The CI matrix runs 20, 22
+   and 24: the floor is what we promise users, the newest column is what keeps
+   that promise honest on a current runtime.
 
 ## Layout
 
