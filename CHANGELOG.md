@@ -13,8 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **A bare `tsc` wrote its output next to the sources.** `npm run typecheck` passes `--noEmit`,
   but the editor and anyone typing `npx tsc` obey `tsconfig.json` alone. Without `noEmit` there,
-  a full compile dropped .js, .d.ts and .js.map beside every .ts — 72 untracked files in this
-  repository the first time it happened — which the next `git add .` would have swept into a
+  a full compile dropped .js, .d.ts and .js.map beside every .ts — 186 untracked files in this
+  repository the first time it was measured — which the next `git add .` would have swept into a
   commit. `noEmit` now lives in the base config, so emitting is something the build config has to
   ask for explicitly rather than a thing you forget to turn off.
 
