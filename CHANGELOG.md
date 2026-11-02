@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The files GitHub looks for on a healthy repository.** The repository had issue templates and
+  workflows but no `CONTRIBUTING.md`, no `CODE_OF_CONDUCT.md` and no pull request template, so
+  the community profile counted it as incomplete and a first-time contributor had to guess at the
+  house rules. `CONTRIBUTING.md` writes down what the code actually depends on — zero runtime
+  dependencies, ESM with NodeNext and `.js` import suffixes, strict TypeScript including
+  `noUncheckedIndexedAccess`, stdout for machine output and stderr for human output, Node >= 20.11
+  — plus the three local gates CI runs. `CODE_OF_CONDUCT.md` is Contributor Covenant 2.1 with
+  reporting pointed at the private advisory channel. The pull request template asks for the command
+  and its output, because "tests pass" only shows that nothing already covered broke.
+
+### Fixed
+
+- **The lockfile still described 0.1.0 with an engines floor of `>=20`.** It was last written
+  before the version bumps, and nothing in CI reads it closely enough to fail, so a stale lock
+  could have sat there indefinitely. Regenerating it against the current manifest brings the
+  version, the root package entry and `engines.node` back in line.
+- **The bug report template offered a version from nine releases ago.** It asked for `0.1.1` as
+  the example version and pinned the install field to `.../download/v0.1.1/....tgz`. Both still
+  resolve, so nothing was broken — but anyone filling the form in copies a stale shape and the
+  report arrives describing a version nobody runs. The install placeholder now uses
+  `releases/latest/download/`, which keeps working as releases move on.
+- **The channel picker had no route to the one report that must not be public.** `config.yml` had
+  `contact_links: []`; it now carries a link to the private security advisory page.
+- **`docs/DEVELOPMENT.md` forbade the Node version CI actually runs.** The paragraph on the floor
+  claimed the matrix runs 20 and 22 and that "anything newer is not allowed either". The workflow
+  has run 20, 22 and 24 for several releases. It now says what the floor is for — the oldest
+  runtime we promise users — and what the newest column is for: keeping that promise honest on a
+  current runtime.
+- **`CONTRIBUTING.md` was reachable only from the file list.** The security paragraph at the end
+  of the README now points at it, in the same bilingual shape that paragraph already uses.
+
 ## [0.1.13] - 2026-11-02
 
 ### Changed
