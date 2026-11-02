@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-11-02
+
 ### Fixed
 
 - **The dependabot ignore list named one half of a pair npm resolves as a single
@@ -20,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reads package.json, package-lock.json and dependabot.yml side by side: an
   exactly-pinned peer pair has to be ignored as a pair, and every ignored name
   still has to be a dependency this repository declares.
+
+### Quality
+
+- 392 tests across 28 spec files, 4997 lines of TypeScript.
+- CI matrix: Ubuntu and Windows, Node 20, 22 and 24.
+- Coverage: one leg only, Linux on Node 24, so the numbers stay comparable between runs.
 
 ## [0.1.22] - 2026-11-02
 
@@ -567,7 +575,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.1.20]: https://github.com/kesheC/repropack/compare/v0.1.19...v0.1.20
 [0.1.21]: https://github.com/kesheC/repropack/compare/v0.1.20...v0.1.21
 [0.1.22]: https://github.com/kesheC/repropack/compare/v0.1.21...v0.1.22
-[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.22...HEAD
+[0.1.23]: https://github.com/kesheC/repropack/compare/v0.1.22...v0.1.23
+[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.23...HEAD
 [0.1.10]: https://github.com/kesheC/repropack/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/kesheC/repropack/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kesheC/repropack/compare/v0.1.7...v0.1.8
