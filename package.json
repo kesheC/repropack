@@ -1,6 +1,6 @@
 {
   "name": "repropack",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "description": "Turn a failing command into a self-contained, secret-free repro bundle that anyone can replay with one command.",
   "type": "module",
   "bin": {
@@ -28,6 +28,8 @@
     "typecheck": "tsc --noEmit",
     "pretest": "npm run build",
     "test": "vitest run",
+    "precoverage": "npm run build",
+    "coverage": "vitest run --coverage",
     "dev": "npm run build && node dist/cli/index.js",
     "prepack": "npm run build"
   },
@@ -48,7 +50,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "typescript": "^5.7.2",
+    "@vitest/coverage-v8": "^4.1.12",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.12"
   },
   "author": "kesheC",

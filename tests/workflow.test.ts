@@ -390,11 +390,36 @@ describe("the contributor-facing gate list", () => {
   it("names the same commands the workflow runs", () => {
     const contrib = readFileSync(path.join(repoRoot, "CONTRIBUTING.md"), "utf8");
     const ci = readWorkflow("ci.yml");
-    const commands = ["npm run typecheck", "npm run build", "npm test", "npm audit --audit-level=high"];
+    const commands = ["npm run typecheck", "npm run build", "npm test", "npm run coverage", "npm audit --audit-level=high"];
     for (const command of commands) {
       expect(ci).toContain("run: " + command);
       expect(contrib).toContain(command);
     }
+  });
+
+  it("enforces the coverage floors somewhere, on one leg", () => {
+    // A threshold in vitest.config.ts is read by `vitest run --coverage` and by
+    // nothing else. The floors and the step that consults them therefore have
+    // to be pinned together: drop the step and the four numbers become a policy
+    // nobody applies, still sitting there looking enforced.
+    const config = readFileSync(path.join(repoRoot, "vitest.config.ts"), "utf8");
+    const thresholds = /thresholds:\s*\{([^}]*)\}/.exec(config);
+    if (thresholds?.[1] === undefined) {
+      throw new Error("vitest.config.ts declares no coverage.thresholds");
+    }
+    for (const key of ["statements", "branches", "functions", "lines"]) {
+      expect(thresholds[1], "no floor for " + key).toContain(key);
+    }
+
+    // Coverage is a second full run of the suite. Running it on all six legs
+    // would double what CI costs without telling anyone anything new, so the
+    // step is expected to be gated to a single leg -- and it has to run after
+    // the install, or it measures an empty tree.
+    const ci = readWorkflow("ci.yml");
+    const at = ci.indexOf("run: npm run coverage");
+    expect(at).toBeGreaterThan(ci.indexOf("run: npm ci"));
+    const step = ci.slice(ci.lastIndexOf("- name:", at), at);
+    expect(step, "the coverage step runs on every matrix leg").toContain("if:");
   });
 });
 

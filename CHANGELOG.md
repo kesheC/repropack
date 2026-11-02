@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.22] - 2026-11-02
+
+### Added
+
+- **Coverage is measured, gated, and green — the suite had never been run under a
+  coverage provider before, so every coverage claim in this repository was unverifiable.**
+  `@vitest/coverage-v8` is now a dev dependency and `npm run coverage` runs the same
+  suite under v8. The config excludes `dist/**`: every spec imports the built output, so
+  without that exclusion each module is counted twice — once through its source map and
+  once as the emitted `dist` file — and the same suite read 46.75% instead of its real
+  89.66%, almost exactly half. Floor numbers for the tree today: 89.66% statements, 78.73% branches, 90.57% functions, 93.62% lines.
+
+### Changed
+
+- **TypeScript 5.9.3 → 7.0.2.** This was declined in `dependabot.yml` when the major
+  first appeared, because TS 7 stopped pulling `@types/node` in implicitly and every
+  build failed on `Cannot find name 'process'`. The fix turned out to be one line —
+  `"types": ["node"]` in the base tsconfig — so TS 7 is adopted, TypeScript is no longer
+  in the ignore list, `vitest` and `@types/node` still are. The comment in
+  `dependabot.yml` records what the ignore is waiting for: an ignore with no stated exit
+  condition silently swallows a whole track of upgrades long after the reason expired.
+
+### Quality
+
+- 390 tests across 28 spec files, 4997 lines of TypeScript.
+- CI matrix: Ubuntu and Windows, Node 20, 22 and 24.
+- Coverage: one leg only, Linux on Node 24, so the numbers stay comparable between runs.
+
 ## [0.1.21] - 2026-11-02
 
 ### Security
@@ -524,7 +552,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.1.19]: https://github.com/kesheC/repropack/compare/v0.1.18...v0.1.19
 [0.1.20]: https://github.com/kesheC/repropack/compare/v0.1.19...v0.1.20
 [0.1.21]: https://github.com/kesheC/repropack/compare/v0.1.20...v0.1.21
-[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.21...HEAD
+[0.1.22]: https://github.com/kesheC/repropack/compare/v0.1.21...v0.1.22
+[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.22...HEAD
 [0.1.10]: https://github.com/kesheC/repropack/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/kesheC/repropack/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kesheC/repropack/compare/v0.1.7...v0.1.8

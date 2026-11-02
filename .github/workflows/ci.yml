@@ -48,6 +48,14 @@ jobs:
       - name: Test
         run: npm test
 
+      # Coverage is the one gate that costs a second full run of the suite, so it
+      # runs on a single leg: one column, the same one every time, which keeps
+      # the numbers comparable between runs. `npm run coverage` fails on a
+      # threshold rather than printing a table nobody reads.
+      - name: Coverage
+        if: runner.os == 'Linux' && matrix.node == 24
+        run: npm run coverage
+
       # The tarball is what users install, so the tarball is what CI runs.
       - name: Smoke test the packed tarball
         shell: bash

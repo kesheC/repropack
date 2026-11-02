@@ -33,6 +33,12 @@ updates:
     # describe a newer runtime than the one this package promises, so both
     # stay on the major that matches the floor. Minors and patches still
     # flow, and security updates are not affected by this list.
+    #
+    # typescript is deliberately not on this list. It was, until typescript 7
+    # stopped pulling @types/node in on its own and the fix turned out to be
+    # one line in tsconfig (types: ["node"]) rather than a held-back major.
+    # An ignore that is not written down with the condition that lifts it
+    # silently blocks every upgrade in its range.
     ignore:
       - dependency-name: "vitest"
         update-types: ["version-update:semver-major"]

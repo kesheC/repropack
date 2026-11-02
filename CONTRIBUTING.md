@@ -42,10 +42,19 @@ Every change has to pass the commands CI runs:
 npm run typecheck   # tsc --noEmit, tests included
 npm run build       # tsc -p tsconfig.build.json
 npm test            # vitest run
+npm run coverage    # the same suite under v8, which fails below the floors
 npm audit --audit-level=high   # the toolchain is the entire supply chain
 ```
 
-Opening the pull request runs them on Ubuntu and Windows across Node 20, 22 and 24.
+Opening the pull request runs them on Ubuntu and Windows across Node 20, 22 and 24. Coverage is
+the exception: it is a second full run of the suite, so it takes one leg instead of six — Linux on
+Node 24, the same one every time, so the numbers stay comparable.
+
+The floors live in `vitest.config.ts` under `coverage.thresholds` and are deliberately a little
+below what the suite reaches today. They are there to catch a real regression, not to make an
+unrelated change pay for a rounding error: if a change drops coverage under a floor, the honest
+responses are to test the new branch or to lower the floor in the same pull request with a reason,
+not to delete the assertion.
 
 The audit is part of the gate because this package ships no runtime dependencies: what you
 install to work on it *is* the whole supply chain. It fails on high and critical advisories
