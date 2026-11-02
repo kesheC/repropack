@@ -17,6 +17,11 @@ Thanks for wanting to help. `repropack` is a small tool that does one thing: tur
 
 You need Node.js 20.11 or newer. There is nothing to install beyond dev dependencies:
 
+> The shipped CLI runs on Node 20.11. The **test runner is newer than the runtime floor**:
+> vitest 4 pulls in vite 8, which declares `^20.19.0 || >=22.12.0`. On Node 20.11–20.18 the
+> tool still runs, but `npm test` does not — use a current 20.x, 22.x or 24.x to work on it.
+> CI's `node: 20` column resolves to the latest 20.x, so it is above that line.
+
 ```bash
 git clone https://github.com/kesheC/repropack.git
 cd repropack

@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The test toolchain was carrying six advisories, two of them critical.** `npm audit`
+  reported `3 moderate, 1 high, 2 critical` on every repository in this set. All six came in
+  through `vitest 2.1.9`: `tinypool <=2.1.1` (prototype-pollution gadget reaching RCE, twice),
+  `@vitest/mocker <=4.1.11` (path traversal, manual-mock code injection) and the `vite`/`esbuild`
+  dev-server request forwarding. The package itself ships zero runtime dependencies, so this
+  was never a user-facing hole — but a contributor's machine runs all of it on `npm test`.
+  `vitest` is now `^4.1.12`, which resolves the tree to vite 8 and reports `0 vulnerabilities`.
+
+  The fix exposed a second thing the gates could not see: **vitest 4 pulls in vite 8, whose
+  `engines` is `^20.19.0 || >=22.12.0`, one minor above the 20.11 floor the shipped CLI still
+  promises.** Those are two different promises — what the tool runs on versus what the test
+  runner runs on — so the floor stays at 20.11 and `CONTRIBUTING.md` now says plainly that
+  working on the code needs a newer 20.x than using it does. CI's `node: 20` column resolves to
+  the latest 20.x, so it sits above that line.
+
+### Added
+
+- **`npm audit --audit-level=high` is now a CI step**, placed after `npm ci` so it inspects the
+  installed tree rather than an empty one. Moderate and low advisories are not gate failures;
+  they get read on the next dependency bump instead of blocking an unrelated fix.
+
+- **Two guards keep the promise honest.** One fails when the audit step disappears or is
+  reordered before the install; the other fails when `engines.node` and the oldest matrix
+  column disagree — a floor above the matrix is a version nobody runs, a floor below it is a
+  version never promised. Moving either number alone now breaks `tests/workflow.test.ts`.
+
 ## [0.1.19] - 2026-11-02
 
 ### Fixed

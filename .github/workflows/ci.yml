@@ -13,8 +13,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        # engines.node is >=20.11, so 20 is the floor we promise; 24 is
-        # the current active LTS. Every version we claim to support runs here.
+        # engines.node is >=20.11: that is the floor for the shipped CLI, and
+        # 20 is the oldest line we promise it on. 24 is the current active LTS,
+        # so the newest column keeps the promise honest on a current runtime.
+        # (Contributors need a newer 20.x: vitest 4 -> vite 8 wants ^20.19.0.)
         node: [20, 22, 24]
 
     steps:
@@ -28,6 +30,13 @@ jobs:
 
       - name: Install
         run: npm ci
+
+      # The package ships zero runtime dependencies, so the dev dependencies
+      # are the whole supply chain. A high or critical advisory in the
+      # toolchain is worth stopping for; moderate and low ones get read on
+      # the next dependency bump instead of blocking an unrelated fix.
+      - name: Audit dev dependencies
+        run: npm audit --audit-level=high
 
       # build only joins src; this also typechecks the test files.
       - name: Typecheck

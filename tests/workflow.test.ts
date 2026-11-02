@@ -141,7 +141,38 @@ describe("release workflow: the tag must agree with package.json", () => {
 });
 
 describe("CI workflow: the packed artifact is the thing under test", () => {
+  it("keeps the engines floor on the oldest matrix column", () => {
+    // `engines.node` is the promise to users; the matrix is the versions we
+    // actually run. If the matrix drops 20, an engines floor of 20 is a claim
+    // nobody tests any more; if it grows only on the right, the promise is a
+    // version we never ran. Bind the two so neither can move alone.
+    const ci = readWorkflow("ci.yml");
+    const matrix = /node:\s*\[([^\]]*)\]/.exec(ci);
+    if (matrix?.[1] === undefined) throw new Error("ci.yml no longer declares a node matrix");
+    const majors = matrix[1].split(",").map((entry) => Number(entry.trim()));
+    const oldest = Math.min(...majors);
+    const pkg = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8")) as {
+      engines?: { node?: string };
+    };
+    const engines = pkg.engines;
+    const floor = /^>=(\d+)\.(\d+)$/.exec(engines?.node ?? "");
+    if (floor?.[1] === undefined) throw new Error("engines.node is not a >=X.Y floor: " + engines?.node);
+    expect(Number(floor[1])).toBe(oldest);
+  });
   const smoke = stepBody(readWorkflow("ci.yml"), "Smoke test the packed tarball");
+
+  it("fails the build on a high or critical advisory in the toolchain", () => {
+    // The package ships zero runtime dependencies, so dev dependencies are the
+    // whole supply chain. The gate is only worth having if it runs after the
+    // install: npm audit before npm ci reads an empty tree and exits 0, which
+    // would be a check that can never fail.
+    const ci = readWorkflow("ci.yml");
+    const installAt = ci.indexOf("run: npm ci");
+    const auditAt = ci.indexOf("npm audit --audit-level=high");
+    expect(installAt).toBeGreaterThan(-1);
+    expect(auditAt).toBeGreaterThan(-1);
+    expect(auditAt).toBeGreaterThan(installAt);
+  });
 
   it("inspects the tarball from the repo root, before changing directory", () => {
     const packAt = smoke.indexOf("npm pack --dry-run --json > pack-meta.json");
