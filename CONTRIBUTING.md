@@ -22,12 +22,12 @@ git clone https://github.com/kesheC/repropack.git
 cd repropack
 npm ci
 npm run build
-node dist/cli.js --help
+node dist/cli/index.js --help
 ```
 
 `dist/` is what the published tarball ships, so `npm run build` has to succeed for anything to be
-reviewable. `node dist/cli.js` runs the build you just made; a `repropack` on your PATH is whatever
-release you installed earlier and is usually stale.
+reviewable. `node dist/cli/index.js` runs the build you just made; a `repropack` on your PATH is
+whatever release you installed earlier and is usually stale.
 
 ## The quality gates
 
@@ -39,9 +39,9 @@ npm run build       # tsc -p tsconfig.build.json
 npm test            # vitest run
 ```
 
-Opening the pull request runs them on Ubuntu and Windows across Node 20, 22 and 24. If a change
-touches a transcript the README quotes, CI re-runs that transcript too and fails when the quoted
-output no longer matches.
+Opening the pull request runs them on Ubuntu and Windows across Node 20, 22 and 24. The README
+transcripts are not re-run by CI, so they were checked by hand against a real run on this machine;
+if you touch one, run the command and paste exactly what it printed.
 
 ## House rules
 
