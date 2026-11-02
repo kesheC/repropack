@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`npm run dev` could not start, in any of the six repositories.** The script was
+  `node --experimental-strip-types src/cli.ts`, which never worked here: every source file imports its
+  siblings with a `.js` suffix, because that is what `moduleResolution: NodeNext` requires for the
+  compiled output to resolve, and the type-stripping loader does not map `./errors.js` back to
+  `./errors.ts`. It exited 1 with `ERR_MODULE_NOT_FOUND` before printing a line of the program.
+- The script now builds first and runs the build: `npm run build && node dist/cli/index.js`.
+  The build takes under two seconds, and a development entry point that cannot start is worse than
+  no entry point at all.
+
 ## [0.1.15] - 2026-11-02
 
 ### Fixed
