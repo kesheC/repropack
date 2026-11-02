@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`package-lock.json` was marked `-diff`, so its diff was never readable.** The attribute
+  reads like "also treat this as text" and means the opposite: `diff` set to *unset*, do not
+  diff this file. Every dependency change therefore rendered as `Binary files differ` with zero
+  lines to review, and the only way to see which packages moved was to open the lockfile and
+  read it by hand. The lockfile is the one file a reviewer actually reads on a dependency bump,
+  so this was backwards. The attribute is now `text eol=lf`, and `tests/package.test.ts` asks
+  git (`git check-attr diff -- package-lock.json`) rather than inspecting the file, because
+  `-diff`, `diff=false` and `binary` all spell differently and end in the same place.
 ### Security
 
 - **The test toolchain was carrying six advisories, two of them critical.** `npm audit`

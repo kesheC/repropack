@@ -1,4 +1,5 @@
 import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -102,5 +103,26 @@ describe("published package", () => {
     expect(build.compilerOptions?.noEmit).toBe(false);
     expect(build.compilerOptions?.rootDir).toBeDefined();
     expect(build.include).toEqual(["src"]);
+  });
+});
+
+// The lockfile is the one file whose diff a reviewer actually reads when a
+// dependency moves: it is the record of what changed in the tree. A `-diff`
+// attribute reads like "also treat this as text" but means the opposite —
+// `diff` set to unset, i.e. do not diff this file — so git collapses the
+// whole change into "Binary files differ" and the review is blind.
+// The attribute is invisible in the working tree, so only a test can keep it.
+describe("repository attributes", () => {
+  const hasGit = spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0;
+
+  it.skipIf(!hasGit)("keeps the lockfile diffable", () => {
+    // Ask git what it will do, not what the file looks like: -diff, diff=false
+    // and `binary` all parse differently but all end at the same place.
+    const asGitReadsIt = spawnSync("git", ["check-attr", "diff", "--", "package-lock.json"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    expect(asGitReadsIt.status).toBe(0);
+    expect(asGitReadsIt.stdout).not.toContain("diff: unset");
   });
 });

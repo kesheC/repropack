@@ -8,4 +8,6 @@
 
 # Archives and fixtures are bytes, never text.
 *.repropack binary
-package-lock.json text eol=lf -diff
+# The lockfile is text: without this line git can decide it is binary and
+# a dependency change shows up as "Binary files differ" with no diff to read.
+package-lock.json text eol=lf
