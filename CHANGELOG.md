@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-11-02
+
 ### Fixed
 
 - **The README's rule count had nothing watching it.** The Redaction section states how many
@@ -20,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verifies the packed artifact, so the guide now says so, points at the one test that does guard a
   documented number, and adds the two rules that make a transcript reproducible (capture with
   `--no-git`, quote relative paths).
+
+### Quality
+
+- 382 tests across 28 spec files, 4997 lines of TypeScript.
+- CI matrix: Ubuntu and Windows, Node 20, 22 and 24.
+- Zero runtime dependencies.
+
 
 ## [0.1.14] - 2026-11-02
 
@@ -363,7 +372,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.1.12]: https://github.com/kesheC/repropack/compare/v0.1.11...v0.1.12
 [0.1.13]: https://github.com/kesheC/repropack/compare/v0.1.12...v0.1.13
 [0.1.14]: https://github.com/kesheC/repropack/compare/v0.1.13...v0.1.14
-[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.14...HEAD
+[0.1.15]: https://github.com/kesheC/repropack/compare/v0.1.14...v0.1.15
+[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.15...HEAD
 [0.1.10]: https://github.com/kesheC/repropack/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/kesheC/repropack/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kesheC/repropack/compare/v0.1.7...v0.1.8
