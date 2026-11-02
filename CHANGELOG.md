@@ -40,6 +40,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`CONTRIBUTING.md` was reachable only from the file list.** The security paragraph at the end
   of the README now points at it, in the same bilingual shape that paragraph already uses.
 
+- **The setup block told contributors to run a file that does not exist.** It said
+  `node dist/cli.js --help`, but this package's bin is `dist/cli/index.js` — the first command
+  after `npm run build` died with "Cannot find module .../dist/cli.js". CI already asserted the
+  tarball contains `dist/cli/index.js`, so only the document was wrong.
+- **`CONTRIBUTING.md` promised a CI gate that does not exist here.** It said that a change
+  touching a README transcript gets that transcript re-run by CI. Two of the six repositories
+  have such a step; this one does not, so a contributor would have updated the README and waited
+  for a check that never runs. The paragraph now says the transcripts are verified by hand and
+  asks for the exact command and its output instead.
+
 ## [0.1.13] - 2026-11-02
 
 ### Changed
