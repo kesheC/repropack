@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The quickstart's capture transcript now clears its own output first.** Running the
+  README's `repropack capture --out ./bundle` a second time in the same tree did not
+  start from the same state: `./bundle` already existed, capture reused the directory
+  instead of rebuilding it, and the transcript drifted from `files 4 (1.3 KB)` to
+  `files 5 (4.2 KB)` and from `packed 10 file(s)` to `packed 11`. The block now begins
+  with `rm -rf ./bundle demo.repropack`, so the quoted numbers reproduce read after read.
+
 ## [0.1.17] - 2026-11-02
 
 ### Fixed

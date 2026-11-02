@@ -68,7 +68,7 @@ Capture it — every transcript below starts from the repository root, so `demo/
 is entered again:
 
 ```console
-$ cd demo
+$ cd demo && rm -rf ./bundle demo.repropack   # a leftover bundle is reused, not rebuilt
 $ repropack capture --no-git --scope all --out ./bundle -- node src/main.js
 running node src/main.js
 bundle written to …/demo/bundle
