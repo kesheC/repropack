@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The README's rule count had nothing watching it.** The Redaction section states how many
+  rules run over every captured surface, and the Chinese mirror states it again; both were typed
+  by hand, so adding or removing a rule would have left a number that no longer describes the
+  program while every gate stayed green. `tests/package.test.ts` now reads
+  `REDACTION_RULES.length` and asserts both sentences quote it, which turns the next drift into
+  a failure that names the README number and the shipped number side by side.
+
 ## [0.1.14] - 2026-11-02
 
 ### Added
