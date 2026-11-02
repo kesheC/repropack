@@ -544,9 +544,13 @@ Found a vulnerability? Please do not open a public issue — [SECURITY.md](SECUR
 explains the private reporting channel and what to include. Every release is written
 up in [CHANGELOG.md](CHANGELOG.md).
 
+Want to change something? [CONTRIBUTING.md](CONTRIBUTING.md) lists the house rules and the gates a pull request has to pass.
+
 **中文：**
 
 发现漏洞？请不要开公开 issue——[SECURITY.md](SECURITY.md) 说明了私密上报渠道以及需要提交什么。每个版本的变动都写在 [CHANGELOG.md](CHANGELOG.md) 里。
+
+想改点什么？[CONTRIBUTING.md](CONTRIBUTING.md) 写了仓库的几条硬规则，以及 PR 必须过的三道闸门。
 
 ## License / 许可证
 
