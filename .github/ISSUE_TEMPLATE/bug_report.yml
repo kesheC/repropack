@@ -62,7 +62,7 @@ body:
     attributes:
       label: repropack version
       description: The output of `repropack --version`.
-      placeholder: 0.1.18
+      placeholder: 0.1.19
     validations:
       required: true
 

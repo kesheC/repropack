@@ -449,7 +449,7 @@ const { bundle, root } = await capture({
   argv: ["node", "src/main.js"],
   scope: "all",
   out: "./bundle",
-  toolVersion: "0.1.18",
+  toolVersion: "0.1.19",
 });
 
 const verified = await verifyBundle(root, { strict: true });
