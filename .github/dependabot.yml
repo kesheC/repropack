@@ -28,3 +28,13 @@ updates:
       toolchain:
         patterns:
           - "*"
+    # The node floor is 20.11 and the CI matrix honors it, so the toolchain
+    # has to run there too. vitest 5 wants ^22.12, and @types/node majors
+    # describe a newer runtime than the one this package promises, so both
+    # stay on the major that matches the floor. Minors and patches still
+    # flow, and security updates are not affected by this list.
+    ignore:
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]

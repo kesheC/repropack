@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { REDACTION_RULES } from "../src/redact/index.js";
@@ -113,7 +113,18 @@ describe("published package", () => {
 // whole change into "Binary files differ" and the review is blind.
 // The attribute is invisible in the working tree, so only a test can keep it.
 describe("repository attributes", () => {
-  const hasGit = spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0;
+  // `git --version` only says git is installed. A checkout exported with
+// `git archive` (what a CI matrix job for a release tarball, or anyone who
+// downloaded a zip, actually has) has no .git, so check-attr exits 128 and
+// the guard fails for a reason that has nothing to do with the attribute.
+// Ask git whether this directory is inside a work tree, and that it is the
+// one we think it is: a checkout nested in another repository would answer
+// for that repository instead.
+const gitTop = (() => {
+  const probe = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: root, encoding: "utf8" });
+  return probe.status === 0 ? probe.stdout.trim() : "";
+})();
+const hasGit = gitTop !== "" && resolve(gitTop).toLowerCase() === resolve(root).toLowerCase();
 
   it.skipIf(!hasGit)("keeps the lockfile diffable", () => {
     // Ask git what it will do, not what the file looks like: -diff, diff=false

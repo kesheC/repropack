@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `actions/checkout@v5` means whatever the action's maintainers push to that tag, so a
   moved tag silently swaps the code this repository's own token runs — and CI would stay
   green throughout. Both actions are now pinned to a commit sha with the readable version
-  kept beside them (`# v5.1.0`, `# v5.0.0`), and `tests/workflow.test.ts` fails when a
+  kept beside them (`# v7.0.1`, `# v7.1.0`), and `tests/workflow.test.ts` fails when a
   `uses:` line carries a tag instead of a 40-character sha, or a sha without its comment.
   Dependabot bumps the two halves together, so the comment cannot drift away from the sha.
 
@@ -24,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bump arrives as one pull request with a green run behind it rather than a queue of them.
   Dependabot alerts and automated security fixes were already on; without a version-update
   config, a pinned sha would only ever move when someone remembered to move it.
+
+- The dev toolchain's two major-version bumps are now explicitly declined rather than
+  silently pending: `vitest` 5 requires Node ^22.12 and this package still promises
+  20.11, so adopting it would either drop the floor or ship a matrix column that cannot
+  install the toolchain; `@types/node` majors describe a runtime newer than the floor.
+  `dependabot.yml` ignores those two majors only — minors and patches still arrive, and
+  **security updates are not filtered by `ignore`**, so an advisory on either one still
+  opens a pull request.
 
 ## [0.1.20] - 2026-11-02
 
