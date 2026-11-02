@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A bare `tsc` wrote its output next to the sources.** `npm run typecheck` passes `--noEmit`,
+  but the editor and anyone typing `npx tsc` obey `tsconfig.json` alone. Without `noEmit` there,
+  a full compile dropped .js, .d.ts and .js.map beside every .ts — 72 untracked files in this
+  repository the first time it happened — which the next `git add .` would have swept into a
+  commit. `noEmit` now lives in the base config, so emitting is something the build config has to
+  ask for explicitly rather than a thing you forget to turn off.
+
+- **The tsconfig split is now pinned by tests.** `tests/package.test.ts` gained two cases: the
+  base config must set `noEmit` and carry no `outDir`, and the build config must restate
+  `noEmit: false` with `rootDir` and `include: ["src"]`. Both were true before only by accident of
+  whichever file was edited last.
+
 ## [0.1.18] - 2026-11-02
 
 ### Changed

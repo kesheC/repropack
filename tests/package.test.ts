@@ -24,6 +24,24 @@ function readJson(path: string): Record<string, unknown> {
   return JSON.parse(readFileSync(join(root, path), "utf8")) as Record<string, unknown>;
 }
 
+/** tsconfig files carry // comments, so parse them without a JSON5 dependency. */
+function readConfig(path: string): {
+  compilerOptions?: Record<string, unknown>;
+  include?: string[];
+  exclude?: string[];
+} {
+  const raw = readFileSync(join(root, path), "utf8");
+  const stripped = raw
+    .split("\n")
+    .filter((line) => !line.trimStart().startsWith("//"))
+    .join("\n");
+  return JSON.parse(stripped) as {
+    compilerOptions?: Record<string, unknown>;
+    include?: string[];
+    exclude?: string[];
+  };
+}
+
 describe("published package", () => {
   it("builds without sourcemaps for the tarball", () => {
     const raw = readFileSync(join(root, "tsconfig.build.json"), "utf8");
@@ -64,5 +82,25 @@ describe("published package", () => {
     const count = REDACTION_RULES.length;
     expect(quoted(readme, /(\d+) rules cover private/)).toBe(count);
     expect(quoted(readme, /(\d+) 条规则覆盖私钥块/)).toBe(count);
+  });
+
+  it("typechecks without emitting beside the sources", () => {
+    // `npm run typecheck` passes --noEmit, but a bare `tsc` — what an editor and a
+    // curious contributor run — obeys tsconfig.json alone. Without noEmit there it
+    // writes .js and .d.ts next to every .ts: dozens of untracked files (72 in this
+    // repository when the switch went missing) that the next `git add .` sweeps up.
+    const base = readConfig("tsconfig.json");
+    expect(base.compilerOptions?.noEmit).toBe(true);
+    expect(base.compilerOptions?.outDir).toBeUndefined();
+  });
+
+  it("builds src/ only, and actually emits", () => {
+    // The build config inherits the base, so every switch the base sets has to be
+    // restated here. A missing noEmit: false emits nothing and still exits 0; an
+    // inherited include lets a plain .ts under tests/ trip TS6059 on rootDir.
+    const build = readConfig("tsconfig.build.json");
+    expect(build.compilerOptions?.noEmit).toBe(false);
+    expect(build.compilerOptions?.rootDir).toBeDefined();
+    expect(build.include).toEqual(["src"]);
   });
 });
