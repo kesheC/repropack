@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-11-02
+
 ### Security
 
 - **The workflows pinned third-party actions by tag, which is a mutable pointer.**
@@ -24,7 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bump arrives as one pull request with a green run behind it rather than a queue of them.
   Dependabot alerts and automated security fixes were already on; without a version-update
   config, a pinned sha would only ever move when someone remembered to move it.
-
 - The dev toolchain's two major-version bumps are now explicitly declined rather than
   silently pending: `vitest` 5 requires Node ^22.12 and this package still promises
   20.11, so adopting it would either drop the floor or ship a matrix column that cannot
@@ -32,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `dependabot.yml` ignores those two majors only — minors and patches still arrive, and
   **security updates are not filtered by `ignore`**, so an advisory on either one still
   opens a pull request.
+
+### Quality
+
+- 389 tests across 28 spec files, 4997 lines of TypeScript.
+- CI matrix: Ubuntu and Windows, Node 20, 22 and 24.
+- Zero runtime dependencies.
 
 ## [0.1.20] - 2026-11-02
 
@@ -516,7 +523,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.1.18]: https://github.com/kesheC/repropack/compare/v0.1.17...v0.1.18
 [0.1.19]: https://github.com/kesheC/repropack/compare/v0.1.18...v0.1.19
 [0.1.20]: https://github.com/kesheC/repropack/compare/v0.1.19...v0.1.20
-[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.20...HEAD
+[0.1.21]: https://github.com/kesheC/repropack/compare/v0.1.20...v0.1.21
+[Unreleased]: https://github.com/kesheC/repropack/compare/v0.1.21...HEAD
 [0.1.10]: https://github.com/kesheC/repropack/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/kesheC/repropack/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/kesheC/repropack/compare/v0.1.7...v0.1.8
