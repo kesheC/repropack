@@ -449,3 +449,68 @@ describe("the actions the workflows run", () => {
     }
   });
 });
+
+
+describe("the dependencies dependabot is told to leave alone", () => {
+  // The list in dependabot.yml is a claim about the tree: "these upgrades
+  // cannot install here". Nothing executes that file on a pull request, so a
+  // stale entry and a missing one both stay silent until a bot opens the pull
+  // request -- which is how coverage-v8 arrived with no ignore line beside
+  // vitest's, and every CI leg failed on ERESOLVE. Read the manifest, the
+  // lockfile and the config together and hold them to each other.
+  const manifest = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8")) as {
+    devDependencies?: Record<string, string>;
+  };
+  const lock = JSON.parse(readFileSync(path.join(repoRoot, "package-lock.json"), "utf8")) as {
+    packages?: Record<string, { peerDependencies?: Record<string, string> }>;
+  };
+  const dependabot = readFileSync(path.join(repoRoot, ".github", "dependabot.yml"), "utf8");
+  const dev = Object.keys(manifest.devDependencies ?? {});
+
+  /** Dependencies whose version-update:semver-major is refused. */
+  function ignoredMajors(): string[] {
+    const lines = dependabot.split(/\r?\n/);
+    const names: string[] = [];
+    for (let index = 0; index < lines.length; index += 1) {
+      const match = /^\s*-\s*dependency-name:\s*"([^"]+)"\s*$/.exec(lines[index] ?? "");
+      const name = match?.[1];
+      if (name === undefined) continue;
+      // The update-types list is the line after the name, possibly blank-separated.
+      let next = index + 1;
+      while (next < lines.length && (lines[next] ?? "").trim() === "") next += 1;
+      const following = lines[next];
+      if (following !== undefined && following.includes("version-update:semver-major")) names.push(name);
+    }
+    return names;
+  }
+
+  it("holds back both halves of a pair npm resolves as one version", () => {
+    // An exact peer pin means the two packages release in lockstep: bumping
+    // one alone is a dependency graph npm refuses to resolve. Ignoring one
+    // and not the other is therefore not a cautious default, it is a pull
+    // request that cannot install.
+    const ignored = new Set(ignoredMajors());
+    let pairs = 0;
+    for (const name of dev) {
+      const peers = lock.packages?.["node_modules/" + name]?.peerDependencies ?? {};
+      for (const [peerName, range] of Object.entries(peers)) {
+        if (!dev.includes(peerName)) continue; // an optional peer this package never installs
+        if (!/^\d+\.\d+\.\d+$/.test(range)) continue; // a range npm can resolve on its own
+        pairs += 1;
+        expect(
+          ignored.has(name),
+          name + " is pinned to " + peerName + " " + range + ", so both majors move together",
+        ).toBe(ignored.has(peerName));
+      }
+    }
+    expect(pairs, "no exact peer pin was found to check").toBeGreaterThan(0);
+  });
+
+  it("only holds back packages the repository still declares", () => {
+    // An ignore outlives the dependency it names: remove a package and the
+    // entry keeps sitting there, quietly announcing a constraint on nothing.
+    for (const name of ignoredMajors()) {
+      expect(dev, "dependabot ignores " + name + " but nothing declares it").toContain(name);
+    }
+  });
+});

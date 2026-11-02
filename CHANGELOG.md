@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The dependabot ignore list named one half of a pair npm resolves as a single
+  version.** `@vitest/coverage-v8` declares `peerDependencies: { vitest: "<exact
+  version>" }`, so the two release in lockstep and neither major can install
+  without the other. The list held back `vitest` and `@types/node` but not
+  coverage-v8, and the bot opened exactly that pull request the day after
+  coverage-v8 joined the tree: all six CI legs died on `ERESOLVE` on a pull
+  request that could never have worked. Both halves are now ignored together,
+  each line stating the condition that lifts it, and `tests/workflow.test.ts`
+  reads package.json, package-lock.json and dependabot.yml side by side: an
+  exactly-pinned peer pair has to be ignored as a pair, and every ignored name
+  still has to be a dependency this repository declares.
+
 ## [0.1.22] - 2026-11-02
 
 ### Added
